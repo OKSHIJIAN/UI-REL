@@ -10,14 +10,7 @@ let selectedFrame = null;
 let isCapturing = false; // 防抖：防止重复触发导出
 
 // Listen for messages from UI
-figma.showUI(__html__, { width: 1160, height: 760 });
-
-// Restore last saved window size
-figma.clientStorage.getAsync('lastSize').then(function(size) {
-    if (size && size.w && size.h) {
-        figma.ui.resize(size.w, size.h);
-    }
-});
+figma.showUI(__html__, { width: 1000, height: 800 });
 
 figma.ui.onmessage = async (msg) => {
     switch (msg.type) {
@@ -28,12 +21,6 @@ figma.ui.onmessage = async (msg) => {
             selectedFrame = null;
             isCapturing = false;
             figma.currentPage.selection = [];
-            break;
-        case 'resize':
-            if (msg.width && msg.height) {
-                figma.ui.resize(msg.width, msg.height);
-                figma.clientStorage.setAsync('lastSize', { w: msg.width, h: msg.height });
-            }
             break;
         case 'request-current-selection':
             const sel = figma.currentPage.selection;

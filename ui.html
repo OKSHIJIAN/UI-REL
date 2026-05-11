@@ -142,6 +142,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            overflow: hidden;
         }
         .frame-icon-sm {
             width: 28px;
@@ -161,6 +162,7 @@
             font-size: 13px;
             overflow-x: auto;
             white-space: nowrap;
+            min-width: 0;
         }
         .frame-name-text::-webkit-scrollbar { height: 0; } /* 隐藏滚动条，保留滚动能力 */
         .frame-dims {
@@ -335,6 +337,47 @@
             min-height: 320px;
             position: relative;
             overflow: hidden;
+        }
+        /* Bug marking mode cursor */
+        .canvas-container.mark-mode {
+            cursor: crosshair;
+        }
+        .canvas-container.mark-mode .comparison-canvas {
+            cursor: crosshair;
+        }
+        /* Bug marker overlay - covers entire canvas area, intercepts clicks */
+        .bug-marker-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 5;
+        }
+        .bug-dot {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .bug-dot-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--danger);
+            border: 2.5px solid white;
+            box-shadow: 0 2px 8px rgba(255,92,92,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            font-family: 'JetBrains Mono', monospace;
+            transition: transform 0.15s ease;
+        }
+        .bug-dot:hover .bug-dot-inner {
+            transform: scale(1.25);
         }
         .canvas-placeholder {
             display: flex;
@@ -540,31 +583,197 @@
         .btn-action.danger-style:hover {
             background: rgba(255, 92, 92, 0.2);
         }
+        /* Mark bug button active state */
+        .btn-action.mark-active {
+            border-color: var(--danger);
+            color: var(--danger);
+            background: var(--danger-dim);
+            box-shadow: 0 0 12px rgba(255,92,92,0.3);
+        }
 
-        /* Status Message */
-        .status-msg {
-            padding: 10px 16px;
-            border-radius: var(--radius-sm);
-            font-size: 12px;
+        /* Bug Annotation Panel (popover) */
+        .bug-panel {
+            position: absolute;
+            z-index: 200;
+            width: 240px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,92,92,0.2);
+            padding: 12px;
+            display: none;
+        }
+        .bug-panel.visible {
+            display: block;
+            animation: panelIn 0.15s ease;
+        }
+        @keyframes panelIn { from { opacity:0; transform:translateY(-4px) scale(0.97); } to { opacity:1; transform:none; } }
+        .bug-panel-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--danger);
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin: 0 16px;
+            gap: 6px;
         }
+        .bug-panel-textarea {
+            width: 100%;
+            height: 60px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--fg);
+            font-size: 12px;
+            font-family: inherit;
+            padding: 8px;
+            resize: none;
+            outline: none;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .bug-panel-textarea:focus {
+            border-color: var(--accent);
+        }
+        .bug-panel-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .btn-bp {
+            flex: 1;
+            padding: 6px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+        .btn-bp-save {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-bp-save:hover { background: #ff4040; }
+        .btn-bp-del {
+            background: var(--bg-hover);
+            color: var(--fg-muted);
+            border: 1px solid var(--border);
+        }
+        .btn-bp-del:hover { color: var(--danger); border-color: var(--danger); }
+
+        /* Bug List in sidebar */
+        .bug-list-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            max-height: 180px;
+            overflow-y: auto;
+            display: none;
+        }
+        .bug-list-section.visible { display: block; }
+        .bug-list-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--fg-muted);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .bug-count-badge {
+            background: var(--danger);
+            color: white;
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .bug-list-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 7px 8px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-sm);
+            margin-bottom: 5px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.12s ease;
+        }
+        .bug-list-item:hover {
+            border-color: var(--danger-dim);
+            background: var(--bg-hover);
+        }
+        .bug-list-num {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .bug-list-text {
+            font-size: 11px;
+            color: var(--fg-secondary);
+            line-height: 1.35;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        /* Status Toast - floating over canvas area */
+        #statusMsg {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            pointer-events: none;
+            width: auto;
+            max-width: 400px;
+        }
+        .status-msg {
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: var(--bg-elevated) !important;
+            border: 1px solid var(--border) !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset;
+            animation: toastIn 0.2s ease, toastOut 0.3s ease 3.5s forwards;
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
+        }
+        @keyframes toastIn { from { opacity:0; transform:translateY(-6px) scale(0.96); } to { opacity:1; transform:none; } }
+        @keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(-4px); } }
         .status-msg.info {
-            background: var(--accent-glow);
-            color: #b8b0ff;
-            border: 1px solid rgba(108, 92, 231, 0.25);
+            color: #b8b0ff !important;
+            border-color: rgba(108, 92, 231, 0.35) !important;
         }
         .status-msg.success {
-            background: var(--success-dim);
-            color: var(--success);
-            border: 1px solid rgba(0, 214, 143, 0.25);
+            color: var(--success) !important;
+            border-color: rgba(0, 214, 143, 0.35) !important;
         }
         .status-msg.error {
-            background: var(--danger-dim);
-            color: var(--danger);
-            border: 1px solid rgba(255, 92, 92, 0.25);
+            color: var(--danger) !important;
+            border-color: rgba(255, 92, 92, 0.35) !important;
         }
 
         /* Footer */
@@ -659,6 +868,15 @@
             </div>
         </div>
 
+        <!-- Bug List -->
+        <div class="bug-list-section" id="bugListSection">
+            <div class="bug-list-title">
+                <span>Bug 标记</span>
+                <span class="bug-count-badge" id="bugCountBadge">0</span>
+            </div>
+            <div id="bugListContainer"></div>
+        </div>
+
         <!-- Compare Button -->
         <div style="flex:1;"></div>
         <div class="btn-compare-wrapper">
@@ -678,6 +896,9 @@
 
         <!-- Canvas Area -->
         <div class="canvas-container" id="canvasContainer">
+            <!-- Floating toast for status messages -->
+            <div id="statusMsg"></div>
+
             <div class="canvas-placeholder" id="canvasPlaceholder">
                 <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
                     <rect x="8" y="8" width="48" height="48" rx="8" stroke-dasharray="4 4"/>
@@ -688,6 +909,22 @@
                 <p>选择设计稿并上传截图后<br>差异对比将在此显示</p>
             </div>
             <canvas id="comparisonCanvas" class="comparison-canvas" style="display:none;"></canvas>
+            <!-- Bug marker overlay (dots positioned over canvas) -->
+            <div class="bug-marker-overlay" id="bugMarkerOverlay"></div>
+
+            <!-- Bug annotation panel (popover) -->
+            <div class="bug-panel" id="bugPanel">
+                <div class="bug-panel-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Bug #<span id="bugPanelNum">1</span> &middot; 标注
+                </div>
+                <textarea class="bug-panel-textarea" id="bugPanelText" placeholder="描述这个 Bug..."></textarea>
+                <div class="bug-panel-actions">
+                    <button class="btn-bp btn-bp-save" id="bugPanelSave">保存</button>
+                    <button class="btn-bp btn-bp-del" id="bugPanelDel">删除</button>
+                    <button class="btn-bp btn-bp-del" id="bugPanelCancel">取消</button>
+                </div>
+            </div>
         </div>
 
         <!-- Results Panel -->
@@ -712,8 +949,8 @@
             <!-- View Switcher + Sliders -->
             <div class="controls-row">
                 <div class="view-switcher">
-                    <button class="v-btn active" data-mode="heatmap">热力图</button>
-                    <button class="v-btn" data-mode="overlay">叠加</button>
+                    <button class="v-btn active" data-mode="overlay">叠加</button>
+                    <button class="v-btn" data-mode="heatmap">热力图</button>
                     <button class="v-btn" data-mode="sidebyside">并排</button>
                     <button class="v-btn" data-mode="diffonly">仅差异</button>
                 </div>
@@ -746,9 +983,6 @@
     </div><!-- /content-area -->
 </div><!-- /main-layout -->
 
-<!-- Status Messages -->
-<div id="statusMsg"></div>
-
 <div class="footer">UI-REL Plugin v1.0 &middot; Design Review</div>
 
 
@@ -767,8 +1001,18 @@ let state = {
     diffData: null,
     sensitivity: 30,
     opacity: 50,
-    viewMode: 'heatmap',
-    selectedFrameName: ''
+    viewMode: 'overlay',
+    selectedFrameName: '',
+    // Bug marking system
+    bugs: [],              // [{id, x, y, text, canvasX, canvasY}]
+    nextBugId: 1,
+    isMarkMode: false,
+    editingBugId: null,   // currently editing in panel
+    // Canvas display scale for coordinate conversion
+    _canvasScaleX: 1,
+    _canvasScaleY: 1,
+    _canvasOffsetX: 0,
+    _canvasOffsetY: 0
 };
 
 window.addEventListener('message', (event) => {
@@ -813,6 +1057,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('opacitySlider').addEventListener('input', (e) => updateOpacity(e.target.value));
 
     document.getElementById('opToggleSwap').addEventListener('click', toggleOpacity);
+
+    // Bug marking system
+    // markBugBtn removed - direct click-to-mark after analysis
+    // Mark mode is auto-enabled when results are shown
+    document.getElementById('bugPanelSave').addEventListener('click', saveBugAnnotation);
+    document.getElementById('bugPanelDel').addEventListener('click', deleteBugFromPanel);
+    document.getElementById('bugPanelCancel').addEventListener('click', hideBugPanel);
+
+    // Click on container (covers both canvas and overlay) for bug marking
+    var containerEl = document.getElementById('canvasContainer');
+    containerEl.addEventListener('click', onContainerClick);
 
     parent.postMessage({ pluginMessage: { type: 'request-current-selection' } }, '*');
 });
@@ -946,6 +1201,7 @@ function startComparison() {
                 '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>' +
                 ' 分析完成';
             showStatus('\u5dee\u5f02\u5206\u6790\u5b8c\u6210\uff01\u53ef\u5207\u6362\u67e5\u770b\u6a21\u5f0f\u8fdb\u884c\u5bf9\u6bd4', 'success');
+            enableMarkMode();
         } catch (err) {
             console.error(err);
             showStatus('\u5206\u6790\u51fa\u9519: ' + err.message, 'error');
@@ -1022,6 +1278,12 @@ function renderComparison() {
         var imgDrawW = Math.max(1, Math.round(w * sc));
         var imgDrawH = Math.max(1, Math.round(h * sc));
 
+        // Store scale for coordinate conversion (left image)
+        state._canvasScaleX = sc;
+        state._canvasScaleY = sc;
+        state._canvasOffsetX = 0;
+        state._canvasOffsetY = 0;
+
         canvas.width = imgDrawW * 2 + gap;
         canvas.height = imgDrawH;
 
@@ -1051,6 +1313,12 @@ function renderComparison() {
         availH = Math.max(availH, 200);
         var sc = Math.min(availW / w, availH / h, 1);
 
+        // Store scale for coordinate conversion
+        state._canvasScaleX = sc;
+        state._canvasScaleY = sc;
+        state._canvasOffsetX = 0;
+        state._canvasOffsetY = 0;
+
         canvas.width = Math.max(1, Math.round(w * sc));
         canvas.height = Math.max(1, Math.round(h * sc));
 
@@ -1069,6 +1337,42 @@ function renderComparison() {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
     }
+
+    // Refresh overlay dots (markers shown as DOM elements over the canvas)
+    refreshBugDots();
+}
+
+function drawBugMarkersOnCanvas() {
+    if (!state.bugs.length) return;
+    var canvas = document.getElementById('comparisonCanvas');
+    var ctx = canvas.getContext('2d');
+
+    state.bugs.forEach(function(bug) {
+        var dx = bug.x * state._canvasScaleX;
+        var dy = bug.y * state._canvasScaleY;
+
+        // Outer glow
+        ctx.beginPath();
+        ctx.arc(dx, dy, 14, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,92,92,0.25)';
+        ctx.fill();
+
+        // Red circle
+        ctx.beginPath();
+        ctx.arc(dx, dy, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff5c5c';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Number
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('' + bug.id, dx, dy + 0.5);
+    });
 }
 
 function renderHeatmap(ctx, w, h) {
@@ -1156,30 +1460,433 @@ function toggleOpacity() {
     updateOpacity(next);
 }
 
-function exportResult() {
+// ============================================
+// Bug Marking System
+// ============================================
+// Analysis completed -> enable direct click-to-mark on canvas
+function enableMarkMode() {
+    var container = document.getElementById('canvasContainer');
+    container.classList.add('mark-mode');
+    showStatus('点击对比图上的位置来标记 Bug，已有标记点可点击编辑', 'info');
+}
+
+function disableMarkMode() {
+    var container = document.getElementById('canvasContainer');
+    container.classList.remove('mark-mode');
+}
+
+function onContainerClick(e) {
     if (!state.diffData) return;
-    var ec = document.createElement('canvas'), s=2, d=state.diffData;
-    ec.width=d.width*s; ec.height=d.height*s;
-    var ecx=ec.getContext('2d'); ecx.scale(s,s);
-    ecx.putImageData(d.designImageData, 0, 0);
-    var hd=ecx.createImageData(d.width, d.height);
-    for (var i=0;i<d.width*d.height;i++) {
-        var idx=i*4, val=d.pixels[idx];
-        if (val>=d.threshold) {
-            var c=getHeatmapColor(Math.min(val/d.maxDiffValue,1));
-            hd.data[idx]=c[0]; hd.data[idx+1]=c[1]; hd.data[idx+2]=c[2]; hd.data[idx+3]=Math.floor(Math.min(val/d.maxDiffValue,1)*210);
+
+    // If clicked on a bug dot or the annotation panel itself, do nothing (let the dot's handler deal with it)
+    var target = e.target;
+    if (target.closest('.bug-dot') || target.closest('#bugPanel') || target.closest('.bug-panel')) {
+        return;
+    }
+
+    // If a panel is currently open, close it first (don't create bug on accidental click)
+    if (state.editingBugId !== null) {
+        hideBugPanel();
+        return;
+    }
+
+    // Get click position relative to canvas
+    var canvasEl = document.getElementById('comparisonCanvas');
+    var rect = canvasEl.getBoundingClientRect();
+    // Click position relative to canvas element
+    var clickX = e.clientX - rect.left;
+    var clickY = e.clientY - rect.top;
+
+    // Ignore clicks outside canvas bounds
+    if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) return;
+
+    // Convert to original image coordinates
+    var imgX = Math.round(clickX / state._canvasScaleX);
+    var imgY = Math.round(clickY / state._canvasScaleY);
+
+    // Clamp to image bounds
+    imgX = Math.max(0, Math.min(imgX, state.diffData.width));
+    imgY = Math.max(0, Math.min(imgY, state.diffData.height));
+
+    // Create new bug
+    var bug = {
+        id: state.nextBugId++,
+        x: imgX,
+        y: imgY,
+        text: '',
+        displayX: clickX,
+        displayY: clickY
+    };
+    state.bugs.push(bug);
+
+    // Show annotation panel at this position
+    showBugPanel(bug, clickX, clickY);
+}
+
+function showBugPanel(bug, screenX, screenY) {
+    state.editingBugId = bug.id;
+    var panel = document.getElementById('bugPanel');
+    var container = document.getElementById('canvasContainer');
+
+    document.getElementById('bugPanelNum').textContent = bug.id;
+    document.getElementById('bugPanelText').value = bug.text || '';
+    document.getElementById('bugPanelDel').style.display = bug.text ? 'flex' : 'none';
+
+    // Position the panel near the click, but keep within container bounds
+    var cRect = container.getBoundingClientRect();
+    var panelW = 240, panelH = 150; // approximate
+    var left = screenX + 16;
+    var top = screenY - 20;
+    if (left + panelW > cRect.width - 10) left = screenX - panelW - 16;
+    if (top + panelH > cRect.height - 10) top = screenY - panelH + 30;
+    if (left < 5) left = 5;
+    if (top < 5) top = 5;
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.classList.add('visible');
+
+    // Focus textarea
+    setTimeout(function() { document.getElementById('bugPanelText').focus(); }, 50);
+}
+
+function hideBugPanel() {
+    document.getElementById('bugPanel').classList.remove('visible');
+    state.editingBugId = null;
+}
+
+function saveBugAnnotation() {
+    var text = document.getElementById('bugPanelText').value.trim();
+    var bug = state.bugs.find(function(b) { return b.id === state.editingBugId; });
+    if (!bug) return;
+
+    if (!text) {
+        // No description — for new bugs delete, for existing bugs restore original text
+        if (bug.text) {
+            // Editing existing bug: restore original text, cancel edit
+            document.getElementById('bugPanelText').value = bug.text;
+            showStatus('描述不能为空，已恢复原文', 'error');
+            return;
+        } else {
+            // New bug with no text: delete it
+            deleteBugById(state.editingBugId);
+            hideBugPanel();
+            showStatus('已取消标记（无描述）', 'info');
+            return;
         }
     }
-    ecx.globalAlpha=0.85; ecx.globalCompositeOperation='screen'; ecx.putImageData(hd, 0, 0);
-    ec.toBlob(function(blob) {
-        var url=URL.createObjectURL(blob), a=document.createElement('a');
-        a.download='ui-rel-review-'+Date.now()+'.png'; a.href=url; a.click();
-        URL.revokeObjectURL(url); showStatus('\u70ed\u529b\u56fe\u62a5\u544a\u5df2\u5bfc\u51fa\uff01','success');
-    }, 'image/png');
+
+    bug.text = text;
+    hideBugPanel();
+    refreshBugList();
+    refreshBugDots();
+    renderComparison();
+
+    showStatus('\u5df2\u4fdd\u5b58 Bug #' + state.editingBugId + ': ' + text, 'success');
+}
+
+function deleteBugById(bugId) {
+    var idx = state.bugs.findIndex(function(b) { return b.id === bugId; });
+    if (idx !== -1) {
+        state.bugs.splice(idx, 1);
+        // Renumber remaining bugs: reassign sequential ids starting from 1
+        for (var i = 0; i < state.bugs.length; i++) {
+            state.bugs[i].id = i + 1;
+        }
+        // Update nextBugId to be max+1
+        state.nextBugId = state.bugs.length + 1;
+    }
+}
+
+function deleteBugFromPanel() {
+    if (!state.editingBugId) return;
+    deleteBugById(state.editingBugId);
+    hideBugPanel();
+    refreshBugList();
+    refreshBugDots();
+    renderComparison();
+    showStatus('\u5df2\u5220\u9664 Bug #' + state.editingBugId, 'info');
+}
+
+function refreshBugDots() {
+    var overlay = document.getElementById('bugMarkerOverlay');
+    overlay.innerHTML = '';
+
+    if (state.bugs.length === 0) {
+        var section = document.getElementById('bugListSection');
+        section.classList.remove('visible');
+        document.getElementById('bugCountBadge').textContent = '0';
+        return;
+    }
+
+    var canvasEl = document.getElementById('comparisonCanvas');
+    var rect = canvasEl.getBoundingClientRect();
+    var containerRect = document.getElementById('canvasContainer').getBoundingClientRect();
+
+    // Offset of canvas within container
+    var offsetX = rect.left - containerRect.left;
+    var offsetY = rect.top - containerRect.top;
+
+    state.bugs.forEach(function(bug) {
+        var dotX = offsetX + bug.x * state._canvasScaleX;
+        var dotY = offsetY + bug.y * state._canvasScaleY;
+
+        var dot = document.createElement('div');
+        dot.className = 'bug-dot';
+        dot.style.left = dotX + 'px';
+        dot.style.top = dotY + 'px';
+        dot.dataset.bugId = bug.id;
+        dot.innerHTML = '<div class="bug-dot-inner">' + bug.id + '</div>';
+        dot.title = 'Bug #' + bug.id + ': ' + (bug.text || '(点击编辑)');
+        dot.addEventListener('click', function(e) {
+            e.stopPropagation(); // prevent bubbling to canvas
+            e.preventDefault();
+            openBugForEdit(bug.id, dotX, dotY);
+        });
+        overlay.appendChild(dot);
+    });
+
+    // Show bug list section
+    var section = document.getElementById('bugListSection');
+    section.classList.add('visible');
+    document.getElementById('bugCountBadge').textContent = state.bugs.length;
+}
+
+function openBugForEdit(bugId, screenX, screenY) {
+    var bug = state.bugs.find(function(b) { return b.id === bugId; });
+    if (!bug) return;
+    // Use stored display position or calculate fresh
+    if (screenX === undefined) {
+        var canvasEl = document.getElementById('comparisonCanvas');
+        var rect = canvasEl.getBoundingClientRect();
+        var containerRect = document.getElementById('canvasContainer').getBoundingClientRect();
+        var offsetX = rect.left - containerRect.left;
+        var offsetY = rect.top - containerRect.top;
+        screenX = offsetX + bug.x * state._canvasScaleX;
+        screenY = offsetY + bug.y * state._canvasScaleY;
+    }
+    showBugPanel(bug, screenX, screenY);
+}
+
+function refreshBugList() {
+    var container = document.getElementById('bugListContainer');
+    container.innerHTML = '';
+    state.bugs.forEach(function(bug) {
+        var item = document.createElement('div');
+        item.className = 'bug-list-item';
+        item.innerHTML =
+            '<div class="bug-list-num">' + bug.id + '</div>' +
+            '<div class="bug-list-text">' + escapeHtml(bug.text || '(\u65e0\u63cf\u8ff0)') + '</div>';
+        item.addEventListener('click', function() { openBugForEdit(bug.id); });
+        container.appendChild(item);
+    });
+    document.getElementById('bugCountBadge').textContent = state.bugs.length;
+}
+
+function exportResult() {
+    if (!state.diffData) return;
+
+    // Generate overlay canvas (design + screenshot with opacity) as the main image
+    var overlayCanvas = document.createElement('canvas');
+    overlayCanvas.width = state.diffData.width;
+    overlayCanvas.height = state.diffData.height;
+    var oCtx = overlayCanvas.getContext('2d');
+    oCtx.putImageData(state.diffData.designImageData, 0, 0);
+    oCtx.globalAlpha = state.opacity / 100;
+    var tmpCv = document.createElement('canvas'); tmpCv.width=state.diffData.width; tmpCv.height=state.diffData.height;
+    tmpCv.getContext('2d').putImageData(state.diffData.screenshotImageData, 0, 0);
+    oCtx.drawImage(tmpCv, 0, 0);
+    oCtx.globalAlpha = 1;
+
+    // Do NOT draw bug markers on the image - use DOM overlay instead (for CSS hover animation)
+    var mainImgUrl = overlayCanvas.toDataURL('image/png');
+
+    // Build DOM marker elements for each bug (positioned over the image)
+    var imgW = state.diffData.width;
+    var imgH = state.diffData.height;
+
+    var bugDomMarkers = '';
+    state.bugs.forEach(function(bug) {
+        var pctX = Math.round(bug.x / imgW * 10000) / 100; // percent with 2 decimals
+        var pctY = Math.round(bug.y / imgH * 10000) / 100;
+        var labelText = escapeHtml('#' + bug.id + (bug.text ? ' ' + bug.text : ''));
+        bugDomMarkers +=
+            '<div class="r-bug-marker" style="left:' + pctX + '%;top:' + pctY + '%;" data-id="' + bug.id + '">' +
+            '<div class="r-bug-dot">' +
+            '<div class="r-bug-num">' + bug.id + '</div>' +
+            '</div>' +
+            (bug.text ? '<div class="r-bug-label">' + labelText + '</div>' : '') +
+            '</div>';
+    });
+
+    // Bug list HTML with checkboxes
+    var bugRows = '';
+    if (state.bugs.length > 0) {
+        state.bugs.forEach(function(bug) {
+            bugRows +=
+                '<tr data-bug-id="' + bug.id + '">' +
+                '<td style="width:36px;"><input type="checkbox" class="r-bug-cb" checked data-bug-id="' + bug.id + '" /></td>' +
+                '<td style="color:#ff5c5c;font-weight:700;width:50px;" class="r-bug-id-td">#' + bug.id + '</td>' +
+                '<td style="font-family:monospace;font-size:12px;color:#8888a0;width:90px;">(' + bug.x + ', ' + bug.y + ')</td>' +
+                '<td>' + escapeHtml(bug.text || '-') + '</td>' +
+                '</tr>';
+        });
+    }
+
+    var now = new Date();
+    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+    // --- Build full report HTML ---
+    var html =
+'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>UI-REL Report</title>'
++
+'<style>'
++
+'*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;line-height:1.6;padding:40px 20px;transition:background .25s,color .25s,border-color .25s;}'
++ 'body.dark{background:#16162a;color:#d0d0dc;}'
++ 'body.dark .header{border-color:#6c5ce7;}'
++ 'body.dark .header h1{color:#e0e0e8;}'
++ 'body.dark .meta{color:#777;}'
++ 'body.dark .stat-card{background:#22223a;border-color:#333355;}'
++ 'body.dark .stat-lbl{color:#888;}'
++ 'body.dark .section-title{color:#d0d0dc;}'
++ 'body.dark .main-img-wrap img{border-color:#333355;}'
++ 'body.dark .img-controls{background:rgba(30,30,55,.7);}'
++ 'body.dark .img-controls label{color:#999;}'
++ 'body.dark .op-toggle{background:#2a2a45;border-color:#444;color:#aaa;}'
++ 'body.dark .bug-table{background:#22223a;border-color:#333355;}'
++ 'body.dark .bug-table th{background:#1a1a30;color:#999;border-color:#333355;}'
++ 'body.dark .bug-table td{border-color:#2a2a48;color:#ccc;}'
++ 'body.dark .bug-table tr:hover td{background:rgba(108,92,231,.08);}'
++ 'body.dark .footer{border-color:#333355;color:#666;}'
++'.report{max-width:960px;margin:0 auto;}'
++'.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #6c5ce7;transition:border-color .25s;}'
++'.header h1{font-size:22px;color:#333;display:flex;align-items:center;gap:10px;transition:color .25s;}'
++'.header h1 span{background:linear-gradient(135deg,#6c5ce7,#a66cff);color:white;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;}'
++'.meta{font-size:13px;color:#999;text-align:right;transition:color .25s;}'
+// Toolbar
++'.toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;}'
++'.tool-btn{padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #ccc;background:#fff;transition:all .2s;color:#666;}'
++'.tool-btn:hover{border-color:#6c5ce7;color:#6c5ce7;background:#fafaff;}'
+// Stats
++'.stats{display:flex;gap:12px;margin-bottom:24px;}'
++'.stat-card{flex:1;background:#fff;border-radius:10px;padding:14px;text-align:center;border:1px solid #e4e6eb;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:all .25s;}'
++'.stat-val{font-size:22px;font-weight:700;color:#6c5ce7;}'
++'.stat-val.danger{color:#ff5c5c;}'
++'.stat-lbl{font-size:10px;color:#999;margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}'
+// Section titles
++'.section-title{font-size:14px;font-weight:700;margin:20px 0 12px;color:#222;display:flex;align-items:center;gap:8px;transition:color .25s;}'
++'.section-title::before{content:"";width:4px;height:16px;background:#6c5ce7;border-radius:2px;}'
+// Image area with opacity control
++'.main-img-wrap{position:relative;text-align:center;margin-bottom:24px;}'
++'.main-img-wrap img{max-width:100%;border-radius:12px;border:1px solid #e4e6eb;box-shadow:0 4px 24px rgba(0,0,0,.08);display:block;transition:opacity .15s ease,border-color .25s;}'
++'.img-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;padding:8px 16px;background:rgba(255,255,255,.65);border-radius:10px;backdrop-filter:blur(8px);}'
++'.img-controls label{font-size:12px;color:#666;font-weight:500;white-space:nowrap;}'
++'.img-controls input[type=range]{width:130px;height:4px;-webkit-appearance:none;appearance:none;background:#ddd;border-radius:2px;outline:none;}'
++'.img-controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#6c5ce7;cursor:pointer;box-shadow:0 0 6px rgba(108,92,231,.4);}'
++'.op-toggle{padding:4px 12px;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;color:#666;}'
++'.op-toggle:hover{border-color:#6c5ce7;color:#6c5ce7;}'
+// Bug markers (DOM overlay on image)
++'.r-bug-marker{position:absolute;z-index:10;transform:translate(-50%,-50%);cursor:pointer;transition:opacity .25s ease;}'
++'.r-bug-marker.dimmed{opacity:.2;}'
++'.r-bug-dot{width:38px;height:38px;border-radius:50%;background:#ff5c5c;border:3.5px solid white;box-shadow:0 2px 12px rgba(255,92,92,.45),0 0 24px rgba(255,92,92,.18);display:flex;align-items:center;justify-content:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .25s ease;}'
++'.r-bug-dot.checked-green{background:#00d68f;box-shadow:0 2px 12px rgba(0,214,143,.45),0 0 24px rgba(0,214,143,.18);}'
++'.r-bug-num{font-size:16px;font-weight:800;color:white;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}'
++'.r-bug-label{position:absolute;top:22px;left:20px;background:rgba(255,92,92,.95);color:white;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:500;white-space:nowrap;box-shadow:0 2px 8px rgba(255,92,92,.35);pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .2s ease,transform .2s ease;}'
++'.r-bug-marker:hover .r-bug-dot{transform:scale(1.35);}'
++'.r-bug-marker:hover .r-bug-label{opacity:1;transform:none;}'
+// Bug table with checkboxes
++'.bug-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e6eb;box-shadow:0 1px 8px rgba(0,0,0,.05);transition:all .25s;}'
++'.bug-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;background:#fafbfc;padding:10px 14px;border-bottom:2px solid #eee;}'
++'.bug-table td{padding:10px 14px;border-bottom:1px solid #f7f8fa;font-size:12px;vertical-align:top;transition:background .2s,color .2s;}'
++'.bug-table tr:last-child td{border-bottom:none;}'
++'.bug-table tr:hover td{background:#fef5f5;}'
++'.r-bug-cb{width:17px;height:17px;accent-color:#00d68f;cursor:pointer;}'
++'.r-bug-id-td{transition:color .25s ease;}'
+// Footer
++'.footer{text-align:center;margin-top:32px;padding:18px;color:#bbb;font-size:11px;border-top:1px solid #eee;transition:border-color .25s;}'
++'</style></head><body>'
++
+'<div class="report">'
+// Header + toolbar
++'<div class="header"><h1><span>U</span> \u53e0\u52a0\u6548\u679c</h1><div class="meta">' + escapeHtml(state.selectedFrameName || 'Unknown') + '<br/>' + dateStr + '</div></div>'
++'<div class="toolbar"><button class="tool-btn" id="themeToggleBtn" onclick="toggleTheme()">\u26a1 \u5207\u6362\u4eae/\u6697</button></div>'
+
+// Stats row
++ (state.diffData ?
+'<div class="stats">'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPercent').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u7387</div></div>'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPixels').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u50cf\u7d20</div></div>'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('similarityScore').textContent+'</div><div class="stat-lbl">\u76f8\u4f3c\u5ea6</div></div>'
++'<div class="stat-card"><div class="stat-val danger" style="color:#ff5c5c;">'+state.bugs.length+'</div><div class="stat-lbl">Bug \u6570\u91cf</div></div>'
++'</div>'
+: '')
+
+// Image section with opacity slider and bug markers
++'<div class="section-title">\u53e0\u52a0\u6548\u679c (\u5e26 Bug \u6807\u8bb0)</div>'
++'<div class="main-img-wrap">'
++'<img id="reportImg" src="'+mainImgUrl+'" alt="overlay comparison" style="max-width:100%;"/>'
++ bugDomMarkers
+// Opacity control bar below image
++'<div class="img-controls">'
++'<label>\u900f\u660e\u5ea6</label>'
++'<input type="range" min="0" max="100" value="'+state.opacity+'" oninput="setImgOpacity(this.value)" />'
++'<span id="opValLabel" style="font-size:12px;color:#666;min-width:32px;">'+state.opacity+'%</span>'
++'<button class="op-toggle" onclick="setImgOpacity(0)">0</button>'
++'<button class="op-toggle" onclick="setImgOpacity(100)">1</button>'
++'</div>'
++'</div>'
+
+// Bug table with checkboxes
++ (state.bugs.length > 0 ?
+('<div class="section-title">Bug \u6807\u8bb0\u5217\u8868 ('+state.bugs.length+')</div>'
++'<table class="bug-table"><thead><tr><th></th><th>#ID</th><th>\u5750\u6807\u4f4d\u7f6e</th><th>\u63cf\u8ff0</th></tr></thead><tbody>'+bugRows+'</tbody></table>')
+: '')
+
+// Footer
++'<div class="footer">UI-REL Plugin v1.0 &middot; '+dateStr+'</div>'
++'</div>'
+
+// Inline JS for interactivity - build script content in a variable first to avoid quote issues
++('<script>'
+// Theme toggle
++"function toggleTheme(){var b=document.body;b.classList.toggle('dark');localStorage.setItem('uirel-theme',b.classList.contains('dark')?'dark':'light');}"
++"(function(){if(localStorage.getItem('uirel-theme')==='dark')document.body.classList.add('dark');})();"
+// Opacity control
++"function setImgOpacity(v){var el=document.getElementById('reportImg');if(el)el.style.opacity=v/100;var lb=document.getElementById('opValLabel');if(lb)lb.textContent=v+'%;}"
+// Checkbox sync
++"document.addEventListener('DOMContentLoaded',function(){"
+  +"document.querySelectorAll('.r-bug-cb').forEach(function(cb){"
+    +"cb.addEventListener('change',function(){"
+      +"var id=this.dataset.bugId,chk=this.checked;"
+      +"var dot=document.querySelector('.r-bug-marker[data-id='+id+'] .r-bug-dot');"
+      +"if(dot){dot.classList.toggle('checked-green',chk);dot.classList.toggle('unchecked-red',!chk);}"
+      +"var mk=document.querySelector('.r-bug-marker[data-id='+id+']');"
+      +"if(mk)mk.classList.toggle('dimmed',!chk);"
+      +"var td=cb.closest('tr').querySelector('.r-bug-id-td');"
+      +"if(td)td.style.color=chk?'#00d68f':'#ff5c5c';"
+      +"saveChecks();"
+    +");});"
+  // Save/load
+  +"function saveChecks(){var s={};document.querySelectorAll('.r-bug-cb').forEach(function(c){s[c.dataset.bugId]=c.checked;});localStorage.setItem('uirel-bug-checks',JSON.stringify(s));}"
+  +"function loadChecks(){try{var d=JSON.parse(localStorage.getItem('uirel-bug-checks'));if(d){document.querySelectorAll('.r-bug-cb').forEach(function(c){if(d[c.dataset.bugId]===false){c.checked=false;c.dispatchEvent(new Event('change'));}})}}catch(e){}}"
+  +"loadChecks();"
++");}"
+// Split <' + '/script> to prevent browser from closing the CURRENT script tag
++'<' + '/script><' + '/body><' + '/html>')
+
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.download = 'ui-rel-report-' + Date.now() + '.html';
+    a.href = url;
+    a.click();
+    URL.revokeObjectURL(url);
+    showStatus('HTML \u62a5\u544a\u5df2\u5bfc\u51fa\uff01', 'success');
 }
 
 function resetAll() {
-    state={designImage:null,screenshotImage:null,designWidth:0,designHeight:0,screenshotWidth:0,screenshotHeight:0,diffData:null,sensitivity:30,opacity:50,viewMode:'heatmap',selectedFrameName:''};
+    state={designImage:null,screenshotImage:null,designWidth:0,designHeight:0,screenshotWidth:0,screenshotHeight:0,diffData:null,sensitivity:30,opacity:50,viewMode:'overlay',selectedFrameName:'',bugs:[],nextBugId:1,isMarkMode:false,editingBugId:null,_canvasScaleX:1,_canvasScaleY:1};
     document.getElementById('frameSelector').className = 'frame-card';
     document.getElementById('frameSelector').innerHTML='<div class="no-frame">\u672a\u9009\u62e9 Frame</div>';
     var btn = document.getElementById('selectFrameBtn');
@@ -1192,6 +1899,14 @@ function resetAll() {
     document.getElementById('resultSection').classList.remove('visible');
     document.getElementById('canvasPlaceholder').style.display = 'flex';
     document.getElementById('comparisonCanvas').style.display = 'none';
+
+    // Reset bug marking
+    exitMarkMode();
+    hideBugPanel();
+    document.getElementById('bugListSection').classList.remove('visible');
+    document.getElementById('bugListContainer').innerHTML = '';
+    document.getElementById('bugMarkerOverlay').innerHTML = '';
+    document.getElementById('bugCountBadge').textContent = '0';
     document.getElementById('sensitivitySlider').value=30; document.getElementById('sensitivityValue').textContent='30';
     document.getElementById('opacitySlider').value=50; document.getElementById('opacityValue').textContent='50%';
     document.querySelectorAll('.v-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode==='heatmap');});
@@ -1199,6 +1914,11 @@ function resetAll() {
     // Restore opacity group visibility for overlay mode
     var opGroup = document.getElementById('opacityGroup');
     if (opGroup) opGroup.style.display = 'flex';
+
+    // Disable mark mode
+    disableMarkMode();
+    hideBugPanel();
+
     showStatus('\u5df2\u91cd\u7f6e\uff0c\u53ef\u4ee5\u91cd\u65b0\u5f00\u59cb\u8d70\u67e5','info');
     parent.postMessage({pluginMessage:{type:'reset'}},'*');
 }
@@ -1222,8 +1942,9 @@ function escapeHtml(str) {
 function showStatus(msg, type) {
     var el=document.getElementById('statusMsg'), icons={info:'<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"stroke-width="2"><circle cx="12"cy="12"r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',success:'<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>',error:'<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"stroke-width="2"><circle cx="12"cy="12"r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>'};
     el.innerHTML='<div class="status-msg '+type+'">'+icons[type]+msg+'</div>';
-    if(type!=='error') setTimeout(function(){if(el.lastChild&&el.lastChild.textContent.includes(msg))el.innerHTML='';},5000);
+    // Auto-remove after CSS animation completes (~4s)
+    if(type!=='error') setTimeout(function(){el.innerHTML='';},4000);
 }
-    </script>
+</script>
 </body>
 </html>
