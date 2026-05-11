@@ -1,0 +1,1 @@
+{"name": "UI-REL Design Review", "id": "ui-rel-design-review", "api": "1.0.0", "main": "code.js", "capabilities": [], "enableProposedApi": false, "editorType": ["figma"], "ui": "ui.html", "networkAccess": {"allowedDomains": ["*"], "reasoning": "插件需要加载用户上传的本地图片进行差异对比分析"}}
