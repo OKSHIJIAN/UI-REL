@@ -2,12 +2,13 @@
 // UI-REL Design Review Plugin - Main Plugin Code
 // ============================================
 // This runs in the Figma sandbox and handles:
-// - Frame selection
+// - Frame selection (single & multi)
 // - Image capture/export
 // - Communication with UI
 
 let selectedFrame = null;
 let isCapturing = false; // 防抖：防止重复触发导出
+let capturedFrameNames = []; // UI端已捕获的frameName列表
 
 // Listen for messages from UI
 figma.showUI(__html__, { width: 1000, height: 800 });
@@ -17,9 +18,13 @@ figma.ui.onmessage = async (msg) => {
         case 'select-frame':
             await handleFrameSelection();
             break;
+        case 'capture-all-selected':
+            await captureAllSelectedFrames();
+            break;
         case 'reset':
             selectedFrame = null;
             isCapturing = false;
+            capturedFrameNames = [];
             figma.currentPage.selection = [];
             break;
         case 'request-current-selection':
@@ -28,27 +33,53 @@ figma.ui.onmessage = async (msg) => {
                 handleFrameSelection();
             }
             break;
+        case 'captured-frame-names':
+            // UI回传已有的frameName列表，用于增量捕获去重
+            capturedFrameNames = msg.names || [];
+            console.log('[code.js] received captured names:', capturedFrameNames);
+            break;
         default:
             console.log('Unknown message type:', msg.type);
     }
 };
 
-// Listen for selection changes - auto-detect frame
+// Listen for selection changes - auto-detect frame(s)
 figma.on('selectionchange', () => {
     const selection = figma.currentPage.selection;
-    console.log('[code.js] selectionchange triggered, count:', selection.length);
+    console.log('[code.js] selectionchange triggered, count:', selection.length, 'isCapturing:', isCapturing);
+    
+    if (isCapturing) {
+        console.log('[code.js] selectionchange skipped: capture in progress');
+        return; // 捕获中不响应 selection 变化
+    }
     
     if (selection.length > 0) {
-        // Try to find a valid frame from current selection
-        const frame = findSelectedFrame(selection);
-        if (frame) {
-            selectedFrame = frame;
-            
-            // 防抖：如果正在导出中则跳过
-            if (!isCapturing) {
-                captureAndSendImage(frame);
+        const validFrames = findValidFramesFromSelection(selection);
+        console.log('[code.js] validFrames found:', validFrames.length);
+        
+        if (validFrames.length >= 1) {
+            // 无论选中几个，都走 handleFrameSelection 逻辑
+            // 多选时自动批量捕获
+            selectedFrame = validFrames[0];
+
+            if (validFrames.length === 1) {
+                // 单选：直接捕获
+                captureAndSendImage(validFrames[0]);
             } else {
-                console.log('[code.js] skipping - capture already in progress');
+                // 多选：自动批量捕获（过滤已存在的，只发新增的）
+                if (isCapturing) return;
+                console.log('[code.js] auto batch-capturing', validFrames.length, 'frames, captured:', capturedFrameNames.length);
+                figma.ui.postMessage({
+                    pluginMessage: {
+                        type: 'multi-selection-detected',
+                        data: {
+                            count: validFrames.length,
+                            frames: validFrames.map(f => ({ name: f.name, type: f.type, width: f.width, height: f.height }))
+                        }
+                    }
+                });
+                // isCapturing 在内部函数里设置
+                captureAllSelectedFramesInternal(validFrames, capturedFrameNames);
             }
         } else {
             // Fallback: try to find any frame on the page
@@ -76,50 +107,65 @@ setTimeout(() => {
     }
 }, 500);
 
-// Handle frame selection
+// Handle frame selection (supports both single & multi)
 async function handleFrameSelection() {
+    if (isCapturing) {
+        console.log('[code.js] handleFrameSelection skipped: capture in progress');
+        return;
+    }
+    
     const selection = figma.currentPage.selection;
     
-    // Check if user has something selected
     if (selection.length === 0) {
-        // Try to find frames in the current page
         const frames = findFrames(figma.currentPage);
         
         if (frames.length === 0) {
             figma.ui.postMessage({
-                pluginMessage: {
-                    type: 'error',
-                    message: '当前页面没有找到 Frame。请在画布中选中一个 Frame，或者先创建 Frame。'
-                }
+                pluginMessage: { type: 'error', message: '当前页面没有找到 Frame。请在画布中选中一个 Frame，或者先创建 Frame。' }
             });
             return;
         } else if (frames.length === 1) {
-            // Auto-select the only frame
             selectedFrame = frames[0];
             await captureAndSendImage(frames[0]);
             return;
         } else {
-            // Auto-select and capture the first visible frame
+            // Multiple frames on page but none selected -> auto batch capture all
             selectedFrame = frames[0];
-            figma.currentPage.selection = [frames[0]];
-            figma.viewport.scrollAndZoomIntoView([frames[0]]);
-            await captureAndSendImage(frames[0]);
+            figma.ui.postMessage({
+                pluginMessage: {
+                    type: 'multi-selection-detected',
+                    data: { count: frames.length, frames: frames.map(f => ({ name: f.name, type: f.type, width: f.width, height: f.height })) }
+                }
+            });
+            await captureAllSelectedFramesInternal(frames, capturedFrameNames);
             return;
         }
     }
 
-    // User has selection - find a valid frame
+    // Has selection -> check how many valid frames
+    const validFrames = findValidFramesFromSelection(selection);
+
+    if (validFrames.length > 1) {
+        // Multi-select -> batch capture
+        selectedFrame = validFrames[0];
+        figma.ui.postMessage({
+            pluginMessage: {
+                type: 'multi-selection-detected',
+                data: { count: validFrames.length, frames: validFrames.map(f => ({ name: f.name, type: f.type, width: f.width, height: f.height })) }
+            }
+        });
+        await captureAllSelectedFramesInternal(validFrames, capturedFrameNames);
+        return;
+    }
+
     const frame = findSelectedFrame(selection);
     
     if (!frame) {
-        // Try harder - check if selection is inside a frame
         let foundFrame = null;
         for (const item of selection) {
             foundFrame = item.parent;
             while (foundFrame && foundFrame.type !== 'PAGE') {
-                if (foundFrame.type === 'FRAME' || foundFrame.type === 'COMPONENT' || foundFrame.type === 'INSTANCE') {
-                    break;
-                }
+                if (foundFrame.type === 'FRAME' || foundFrame.type === 'COMPONENT' || foundFrame.type === 'INSTANCE') break;
                 foundFrame = foundFrame.parent;
             }
             if (foundFrame && foundFrame.type !== 'PAGE') break;
@@ -128,10 +174,7 @@ async function handleFrameSelection() {
         
         if (!foundFrame) {
             figma.ui.postMessage({
-                pluginMessage: {
-                    type: 'error',
-                    message: `选中的是 "${selection[0].name}" (${selection[0].type})，不是 Frame。请选中一个 Frame 或 Component。`
-                }
+                pluginMessage: { type: 'error', message: `选中的是 "${selection[0].name}" (${selection[0].type})，不是 Frame。请选中一个 Frame 或 Component。` }
             });
             return;
         }
@@ -148,60 +191,69 @@ async function handleFrameSelection() {
 // Find frames recursively in a node
 function findFrames(node) {
     let frames = [];
-
-    if (node.type === 'FRAME') {
-        frames.push(node);
-    }
-
+    if (node.type === 'FRAME') frames.push(node);
     if ('children' in node) {
         for (const child of node.children) {
             frames = frames.concat(findFrames(child));
         }
     }
-
     return frames;
 }
 
-// Find a valid frame from selection (check selection or parents)
+// Find a valid frame from single selection
 function findSelectedFrame(selection) {
     for (const item of selection) {
-        console.log('[code.js] checking item:', item.name, 'type:', item.type);
-        
-        // Direct match
         const directTypes = ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE'];
-        if (directTypes.includes(item.type)) {
-            console.log('[code.js] -> direct match');
-            return item;
-        }
+        if (directTypes.includes(item.type)) return item;
         
-        // Walk up the parent chain to find a frame-like ancestor
         let current = item.parent;
         let depth = 0;
         while (current && depth < 50 && current.type !== 'PAGE') {
-            if (directTypes.includes(current.type)) {
-                console.log('[code.js] -> found parent frame:', current.name, 'type:', current.type);
-                return current;
-            }
+            if (directTypes.includes(current.type)) return current;
             current = current.parent;
             depth++;
         }
         
-        // If we reached PAGE without finding anything, check if PAGE has children that are frames
-        // This handles the case where user selected something inside a top-level frame
         if (!current || current.type === 'PAGE') {
-            // Try to find any frame on the page as fallback
             const pageFrames = findFrames(figma.currentPage);
-            if (pageFrames.length > 0) {
-                // Return the first frame found on the page
-                return pageFrames[0];
-            }
+            if (pageFrames.length > 0) return pageFrames[0];
         }
     }
-
     return null;
 }
 
-// Capture frame as image and send to UI
+// Find ALL valid frames from selection (for multi-select)
+function findValidFramesFromSelection(selection) {
+    const validFrames = [];
+    const seenIds = new Set();
+    
+    for (const item of selection) {
+        const directTypes = ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE'];
+        
+        if (directTypes.includes(item.type)) {
+            if (!seenIds.has(item.id)) {
+                seenIds.add(item.id);
+                validFrames.push(item);
+            }
+        } else {
+            let current = item.parent;
+            while (current && current.type !== 'PAGE') {
+                if (directTypes.includes(current.type)) {
+                    if (!seenIds.has(current.id)) {
+                        seenIds.add(current.id);
+                        validFrames.push(current);
+                    }
+                    break;
+                }
+                current = current.parent;
+            }
+        }
+    }
+    
+    return validFrames;
+}
+
+// Capture a single frame as image and send to UI
 async function captureAndSendImage(frame) {
     if (isCapturing) return;
     isCapturing = true;
@@ -210,27 +262,19 @@ async function captureAndSendImage(frame) {
         console.log('[code.js] === START captureAndSendImage ===');
         console.log('[code.js] frame:', frame.name, frame.type, `${frame.width}x${frame.height}`);
 
-        // Export settings - use PNG for highest quality
         const exportSettings = {
             format: 'PNG',
             constraint: { type: 'SCALE', value: 1 },
             contentsOnly: true,
         };
 
-        console.log('[code.js] calling exportAsync...');
         const bytes = await frame.exportAsync(exportSettings);
-        console.log('[code.js] exportAsync done, bytes length:', bytes.length);
-
-        // Convert to data URL
-        console.log('[code.js] converting to base64...');
         const base64 = arrayBufferToBase64(bytes);
         const dataUrl = `data:image/png;base64,${base64}`;
-        console.log('[code.js] base64 done, length:', base64.length);
 
         const exportWidth = Math.round(frame.width);
         const exportHeight = Math.round(frame.height);
 
-        console.log('[code.js] sending design-captured message to UI...');
         figma.ui.postMessage({
             pluginMessage: {
                 type: 'design-captured',
@@ -245,19 +289,176 @@ async function captureAndSendImage(frame) {
                 }
             }
         });
-        console.log('[code.js] === END captureAndSendImage (success) ===');
 
     } catch (error) {
         console.error('[code.js] ERROR in captureAndSendImage:', error);
         figma.ui.postMessage({
-            pluginMessage: {
-                type: 'error',
-                message: `捕获图片失败: ${error.message}`
-            }
+            pluginMessage: { type: 'error', message: `捕获图片失败: ${error.message}` }
         });
     } finally {
         isCapturing = false;
     }
+}
+
+// ============================================
+// 批量捕获所有选中的 Frame（依次执行）
+// ============================================
+
+// Internal: batch capture with pre-resolved frame list
+// existingNames: UI端已有的frameName列表，用于去重（只发送新增的）
+async function captureAllSelectedFramesInternal(validFrames, existingNames) {
+    if (isCapturing || !validFrames || validFrames.length === 0) return;
+
+    // 过滤掉已存在的 Frame
+    const newFrames = validFrames.filter(f => !existingNames.includes(f.name));
+    if (newFrames.length === 0) {
+        console.log('[code.js] all frames already captured, skipping');
+        return;
+    }
+
+    isCapturing = true;
+
+    // Notify start
+    figma.ui.postMessage({ pluginMessage: { type: 'batch-capture-start', data: { count: newFrames.length, isNew: true } } });
+
+    for (let i = 0; i < newFrames.length; i++) {
+        const frame = newFrames[i];
+        
+        // Notify progress
+        figma.ui.postMessage({
+            pluginMessage: {
+                type: 'batch-capture-progress',
+                data: { current: i + 1, total: validFrames.length, frameName: frame.name }
+            }
+        });
+        
+        try {
+            const exportSettings = {
+                format: 'PNG',
+                constraint: { type: 'SCALE', value: 1 },
+                contentsOnly: true,
+            };
+            
+            const bytes = await frame.exportAsync(exportSettings);
+            const base64 = arrayBufferToBase64(bytes);
+            const dataUrl = `data:image/png;base64,${base64}`;
+            
+            figma.ui.postMessage({
+                pluginMessage: {
+                    type: 'design-captured-batch',
+                    data: {
+                        imageDataUrl: dataUrl,
+                        imageData: Array.from(bytes),
+                        frameName: frame.name,
+                        width: Math.round(frame.width),
+                        height: Math.round(frame.height),
+                        index: i + 1
+                    }
+                }
+            });
+            
+            // Small delay between captures
+            await new Promise(r => setTimeout(r, 100));
+            
+        } catch (error) {
+            console.error(`[code.js] Error capturing "${frame.name}":`, error);
+            figma.ui.postMessage({
+                pluginMessage: {
+                    type: 'batch-capture-error',
+                    data: { frameName: frame.name, error: error.message }
+                }
+            });
+        }
+    }
+    
+    isCapturing = false;
+
+    figma.ui.postMessage({
+        pluginMessage: {
+            type: 'batch-capture-complete',
+            data: { count: newFrames.length }
+        }
+    });
+}
+
+// UI-triggered batch capture (re-reads current selection)
+async function captureAllSelectedFrames() {
+    if (isCapturing) return;
+    
+    const selection = figma.currentPage.selection;
+    const validFrames = findValidFramesFromSelection(selection);
+    
+    if (validFrames.length === 0) {
+        figma.ui.postMessage({
+            pluginMessage: { type: 'error', message: '未找到可捕获的 Frame。请选中一个或多个 Frame / Component。' }
+        });
+        return;
+    }
+    
+    isCapturing = true;
+    
+    // Notify start
+    figma.ui.postMessage({ pluginMessage: { type: 'batch-capture-start', data: { count: validFrames.length } } });
+    
+    for (let i = 0; i < validFrames.length; i++) {
+        const frame = validFrames[i];
+        
+        // Notify progress
+        figma.ui.postMessage({
+            pluginMessage: {
+                type: 'batch-capture-progress',
+                data: { current: i + 1, total: validFrames.length, frameName: frame.name }
+            }
+        });
+        
+        try {
+            const exportSettings = {
+                format: 'PNG',
+                constraint: { type: 'SCALE', value: 1 },
+                contentsOnly: true,
+            };
+            
+            const bytes = await frame.exportAsync(exportSettings);
+            const base64 = arrayBufferToBase64(bytes);
+            const dataUrl = `data:image/png;base64,${base64}`;
+            
+            figma.ui.postMessage({
+                pluginMessage: {
+                    type: 'design-captured-batch',
+                    data: {
+                        imageDataUrl: dataUrl,
+                        imageData: Array.from(bytes),
+                        frameName: frame.name,
+                        width: Math.round(frame.width),
+                        height: Math.round(frame.height),
+                        index: i + 1
+                    }
+                }
+            });
+            
+            // Small delay between captures to avoid message stacking
+            await new Promise(r => setTimeout(r, 100));
+            
+        } catch (error) {
+            console.error(`[code.js] Error capturing "${frame.name}":`, error);
+            figma.ui.postMessage({
+                pluginMessage: {
+                    type: 'batch-capture-error',
+                    data: { frameName: frame.name, error: error.message }
+                }
+            });
+        }
+    }
+    
+    isCapturing = false;
+    
+    // Notify complete
+    figma.ui.postMessage({
+        pluginMessage: {
+            type: 'batch-capture-complete',
+            data: { count: validFrames.length }
+        }
+    });
 }
 
 // Convert ArrayBuffer to Base64 string

@@ -247,6 +247,104 @@
         input[type="file"] { display: none; }
 
         /* Mini Previews in Sidebar */
+        .preview-pair-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 45vh;
+            overflow-y: auto;
+        }
+        .preview-pair-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 8px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: transform 0.25s ease, opacity 0.2s ease, background 0.15s ease, border-color 0.15s ease;
+            align-items: start;
+            position: relative;
+            touch-action: pan-x;
+        }
+        .preview-pair-item:hover { border-color: var(--border); background: var(--bg-hover); }
+        .preview-pair-item.active {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 1px var(--accent-glow), 0 2px 12px rgba(108,92,231,0.12);
+        }
+
+        /* 滑动删除状态 */
+        .preview-pair-item.swiping { transition: none; }
+        .preview-pair-item.slide-out {
+            transform: translateX(-100%);
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            transition: transform 0.28s cubic-bezier(.4,0,.2,1), opacity 0.22s ease;
+        }
+        .preview-pair-item .mini-preview-item { margin: 0; border-color: var(--border-subtle); }
+
+        /* 右侧上传占位区域 */
+        .mini-preview-upload-zone {
+            cursor: pointer;
+            border: 1.5px dashed var(--border);
+            transition: all 0.18s ease;
+        }
+        .mini-preview-upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        .upload-placeholder {
+            flex-direction: column;
+            gap: 4px;
+        }
+        .upload-placeholder .upload-icon-sm {
+            width: 20px;
+            height: 20px;
+            stroke: var(--fg-muted);
+            stroke-width: 1.6;
+        }
+        .mini-preview-upload-zone:hover .upload-icon-sm { stroke: var(--accent); }
+        .upload-placeholder-text {
+            font-size: 9px;
+            color: var(--fg-muted);
+        }
+        .mini-preview-upload-zone:hover .upload-placeholder-text { color: var(--accent); }
+
+        /* 右侧截图缩略图 */
+        .mini-preview-screenshot img { object-fit: contain; }
+        .badge-screenshot { background: rgba(0,200,170,0.08); color: #00c8aa; }
+
+
+        .preview-pair-label-row {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 4px;
+        }
+        .preview-pair-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--fg-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 160px;
+        }
+        .preview-pair-badge {
+            font-size: 9px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+            background: var(--accent-glow);
+            padding: 1px 7px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        /* Original mini preview styles (kept for single mode fallback) */
         .mini-preview-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -283,6 +381,48 @@
         }
         .badge-design { color: var(--accent); }
         .badge-shot { color: var(--warning); }
+
+        /* Batch capture progress toast */
+        .batch-progress-toast {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 150;
+            text-align: center;
+            pointer-events: none;
+        }
+        .batch-progress-inner {
+            background: var(--bg-elevated) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius-lg);
+            padding: 20px 28px;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.5), 0 0 60px var(--accent-glow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            min-width: 220px;
+        }
+        .batch-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255,255,255,0.15);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .batch-progress-text {
+            font-size: 13px;
+            color: var(--fg);
+            font-weight: 500;
+        }
+        .batch-progress-sub {
+            font-size: 11px;
+            color: var(--fg-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
 
         /* Compare Button */
         .btn-compare-wrapper {
@@ -808,6 +948,205 @@
         /* Hidden utility */
         [hidden], .hidden { display: none !important; }
     </style>
+
+<script>
+// ============================================
+// UI-REL Report Template Generator
+// ============================================
+
+/**
+ * UI-REL Report Template Generator
+ * 从 ui.html 拆分的报告生成模块
+ */
+
+function generateReportHtml(data) {
+    var designImgUrl = data.designImgUrl;
+    var screenshotImgUrl = data.screenshotImgUrl;
+    var bugs = data.bugs;
+    var diffData = data.diffData;
+    var opacity = data.opacity;
+    var frameName = data.frameName;
+
+    // Build DOM marker elements for each bug
+    var imgW = diffData.width;
+    var imgH = diffData.height;
+    var bugDomMarkers = '';
+    bugs.forEach(function(bug) {
+        var pctX = Math.round(bug.x / imgW * 10000) / 100;
+        var pctY = Math.round(bug.y / imgH * 10000) / 100;
+        var labelText = escapeHtml('#' + bug.id + (bug.text ? ' ' + bug.text : ''));
+        bugDomMarkers +=
+            '<div class="r-bug-marker" style="left:' + pctX + '%;top:' + pctY + '%;" data-id="' + bug.id + '">' +
+            '<div class="r-bug-dot">' +
+            '<div class="r-bug-num">' + bug.id + '</div>' +
+            '</div>' +
+            (bug.text ? '<div class="r-bug-label">' + labelText + '</div>' : '') +
+            '</div>';
+    });
+
+    // Bug list HTML with checkboxes
+    var bugRows = '';
+    if (bugs.length > 0) {
+        bugs.forEach(function(bug) {
+            bugRows +=
+                '<tr data-bug-id="' + bug.id + '">' +
+                '<td style="width:36px;"><input type="checkbox" class="r-bug-cb" checked data-bug-id="' + bug.id + '" /></td>' +
+                '<td style="color:#ff5c5c;font-weight:700;width:50px;" class="r-bug-id-td">#' + bug.id + '</td>' +
+                '<td style="font-family:monospace;font-size:12px;color:#8888a0;width:90px;">(' + bug.x + ', ' + bug.y + ')</td>' +
+                '<td>' + escapeHtml(bug.text || '-') + '</td>' +
+                '</tr>';
+        });
+    }
+
+    // Date string
+    var now = new Date();
+    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+    // --- CSS ---
+    var css =
+'*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;line-height:1.6;padding:40px 20px;transition:background .25s,color .25s,border-color .25s;}'
++ 'body.dark{background:#16162a;color:#d0d0dc;}'
++ 'body.dark .header{border-color:#6c5ce7;}'
++ 'body.dark .header h1{color:#e0e0e8;}'
++ 'body.dark .meta{color:#777;}'
++ 'body.dark .stat-card{background:#22223a;border-color:#333355;}'
++ 'body.dark .stat-lbl{color:#888;}'
++ 'body.dark .section-title{color:#d0d0dc;}'
++ 'body.dark .main-img-wrap img{border-color:#333355;}'
++ 'body.dark .img-controls{background:rgba(30,30,55,.7);}'
++ 'body.dark .img-controls label{color:#999;}'
++ 'body.dark .op-toggle{background:#2a2a45;border-color:#444;color:#aaa;}'
++ 'body.dark .bug-table{background:#22223a;border-color:#333355;}'
++ 'body.dark .bug-table th{background:#1a1a30;color:#999;border-color:#333355;}'
++ 'body.dark .bug-table td{border-color:#2a2a48;color:#ccc;}'
++ 'body.dark .bug-table tr:hover td{background:rgba(108,92,231,.08);}'
++ 'body.dark .footer{border-color:#333355;color:#666;}'
++'.report{max-width:960px;margin:0 auto;}'
++'.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #6c5ce7;transition:border-color .25s;}'
++'.header h1{font-size:22px;color:#333;display:flex;align-items:center;gap:10px;transition:color .25s;}'
++'.header h1 span{background:linear-gradient(135deg,#6c5ce7,#a66cff);color:white;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;}'
++'.meta{font-size:13px;color:#999;text-align:right;transition:color .25s;}'
+// Toolbar
++'.toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;}'
++'.tool-btn{padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #ccc;background:#fff;transition:all .2s;color:#666;}'
++'.tool-btn:hover{border-color:#6c5ce7;color:#6c5ce7;background:#fafaff;}'
+// Stats
++'.stats{display:flex;gap:12px;margin-bottom:24px;}'
++'.stat-card{flex:1;background:#fff;border-radius:10px;padding:14px;text-align:center;border:1px solid #e4e6eb;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:all .25s;}'
++'.stat-val{font-size:22px;font-weight:700;color:#6c5ce7;}'
++'.stat-val.danger{color:#ff5c5c;}'
++'.stat-lbl{font-size:10px;color:#999;margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}'
+// Section titles
++'.section-title{font-size:14px;font-weight:700;margin:20px 0 12px;color:#222;display:flex;align-items:center;gap:8px;transition:color .25s;}'
++'.section-title::before{content:"";width:4px;height:16px;background:#6c5ce7;border-radius:2px;}'
+// Image area with opacity control
++'.main-img-wrap{position:relative;text-align:center;margin-bottom:24px;}'
++'.main-img-wrap img{max-width:100%;border-radius:12px;border:1px solid #e4e6eb;box-shadow:0 4px 24px rgba(0,0,0,.08);display:block;transition:opacity .15s ease,border-color .25s;}'
++'.img-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;padding:8px 16px;background:rgba(255,255,255,.65);border-radius:10px;backdrop-filter:blur(8px);}'
++'.img-controls label{font-size:12px;color:#666;font-weight:500;white-space:nowrap;}'
++'.img-controls input[type=range]{width:130px;height:4px;-webkit-appearance:none;appearance:none;background:#ddd;border-radius:2px;outline:none;}'
++'.img-controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#6c5ce7;cursor:pointer;box-shadow:0 0 6px rgba(108,92,231,.4);}'
++'.op-toggle{padding:4px 12px;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;color:#666;}'
++'.op-toggle:hover{border-color:#6c5ce7;color:#6c5ce7;}'
+// Bug markers (DOM overlay on image)
++'.r-bug-marker{position:absolute;z-index:10;transform:translate(-50%,-50%);cursor:pointer;transition:opacity .25s ease;}'
++'.r-bug-marker.dimmed{opacity:.2;}'
++'.r-bug-dot{width:38px;height:38px;border-radius:50%;background:#ff5c5c;border:3.5px solid white;box-shadow:0 2px 12px rgba(255,92,92,.45),0 0 24px rgba(255,92,92,.18);display:flex;align-items:center;justify-content:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .25s ease;}'
++'.r-bug-dot.checked-green{background:#00d68f;box-shadow:0 2px 12px rgba(0,214,143,.45),0 0 24px rgba(0,214,143,.18);}'
++'.r-bug-num{font-size:16px;font-weight:800;color:white;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}'
++'.r-bug-label{position:absolute;top:22px;left:20px;background:rgba(255,92,92,.95);color:white;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:500;white-space:nowrap;box-shadow:0 2px 8px rgba(255,92,92,.35);pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .2s ease,transform .2s ease;}'
++'.r-bug-marker:hover .r-bug-dot{transform:scale(1.35);}'
++'.r-bug-marker:hover .r-bug-label{opacity:1;transform:none;}'
+// Bug table with checkboxes
++'.bug-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e6eb;box-shadow:0 1px 8px rgba(0,0,0,.05);transition:all .25s;}'
++'.bug-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;background:#fafbfc;padding:10px 14px;border-bottom:2px solid #eee;}'
++'.bug-table td{padding:10px 14px;border-bottom:1px solid #f7f8fa;font-size:12px;vertical-align:top;transition:background .2s,color .2s;}'
++'.bug-table tr:last-child td{border-bottom:none;}'
++'.bug-table tr:hover td{background:#fef5f5;}'
++'.r-bug-cb{width:17px;height:17px;accent-color:#00d68f;cursor:pointer;}'
++'.r-bug-id-td{transition:color .25s ease;}'
+// Footer
++'.footer{text-align:center;margin-top:32px;padding:18px;color:#bbb;font-size:11px;border-top:1px solid #eee;transition:border-color .25s;}';
+
+    // --- Inline JS for interactivity (joined by semicolons to avoid parse errors) ---
+    var inlineJs = [
+'toggleTheme=function(){var b=document.body;b.classList.toggle("dark");localStorage.setItem("uirel-theme",b.classList.contains("dark")?"dark":"light");}',
+'(function(){try{if(localStorage.getItem("uirel-theme")==="dark")document.body.classList.add("dark")}catch(e){}})();',
+'setImgOpacity=function(v){var el=document.getElementById("reportScreenshotImg");if(el)el.style.opacity=v/100;var lb=document.getElementById("opValLabel");if(lb)lb.textContent=v+"%"}',
+'document.addEventListener("DOMContentLoaded",function(){',
+'document.querySelectorAll(".r-bug-cb").forEach(function(cb){',
+'cb.addEventListener("change",function(){',
+'var id=this.dataset.bugId,chk=this.checked;',
+"var dot=document.querySelector('.r-bug-marker[data-id='+id+'] .r-bug-dot');",
+'if(dot){dot.classList.toggle("checked-green",chk);dot.classList.remove("unchecked-red");if(!chk)dot.classList.add("unchecked-red");}',
+"var mk=document.querySelector('.r-bug-marker[data-id='+id+']');",
+'if(mk)mk.classList.toggle("dimmed",!chk);',
+'var td=cb.closest("tr").querySelector(".r-bug-id-td");',
+'if(td)td.style.color=chk?"#00d68f":"#ff5c5c";',
+'try{saveChecks()}catch(e){}',
+'});});)',
+'saveChecks=function(){var s={};document.querySelectorAll(".r-bug-cb").forEach(function(c){s[c.dataset.bugId]=c.checked});localStorage.setItem("uirel-bug-checks",JSON.stringify(s))}',
+'loadChecks=function(){try{var d=JSON.parse(localStorage.getItem("uirel-bug-checks"));if(d)document.querySelectorAll(".r-bug-cb").forEach(function(c){if(d[c.dataset.bugId]===false){c.checked=false;c.dispatchEvent(new Event("change"))}})}catch(e){}}',
+'loadChecks();',
+'});'
+].join(';');
+    // --- Assemble full HTML ---
+    var html =
+'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>UI-REL Report</title>'
++'<style>'
++ css
++'</style></head><body>'
++'<div class="report">'
+// Header + toolbar
++'<div class="header"><h1><span>U</span> \u53e0\u52a0\u6548\u679c</h1><div class="meta">' + escapeHtml(frameName || 'Unknown') + '<br/>' + dateStr + '</div></div>'
++'<div class="toolbar"><button class="tool-btn" id="themeToggleBtn" onclick="toggleTheme()">\u26a1 \u5207\u6362\u4eae/\u6697</button></div>'
+
+// Stats row
++ (diffData ?
+'<div class="stats">'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPercent').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u7387</div></div>'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPixels').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u50cf\u7d20</div></div>'
++'<div class="stat-card"><div class="stat-val">'+document.getElementById('similarityScore').textContent+'</div><div class="stat-lbl">\u76f8\u4f3c\u5ea6</div></div>'
++'<div class="stat-card"><div class="stat-val danger" style="color:#ff5c5c;">'+bugs.length+'</div><div class="stat-lbl">Bug \u6570\u91cf</div></div>'
++'</div>'
+: '')
+
+// Image section with dual-layer overlay and bug markers
++'<div class="section-title">\u53e0\u52a0\u6548\u679c (\u5e26 Bug \u6807\u8bb0)</div>'
++'<div class="main-img-wrap">'
++'<div class="img-stack" style="position:relative;display:inline-block;max-width:100%;">'
++'<img id="reportDesignImg" src="'+designImgUrl+'" alt="design" style="max-width:100%;display:block;position:relative;z-index:1;" />'
++'<img id="reportScreenshotImg" src="'+screenshotImgUrl+'" alt="screenshot" style="max-width:100%;display:block;position:absolute;top:0;left:0;z-index:2;opacity:'+(opacity/100)+';" />'
++'</div>'
++ bugDomMarkers
+// Opacity control bar below image
++'<div class="img-controls">'
++'<label>\u900f\u660e\u5ea6</label>'
++'<input type="range" min="0" max="100" value="'+opacity+'" oninput="setImgOpacity(this.value)" />'
++'<span id="opValLabel" style="font-size:12px;color:#666;min-width:32px;">'+opacity+'%</span>'
++'<button class="op-toggle" onclick="setImgOpacity(0)">0</button>'
++'<button class="op-toggle" onclick="setImgOpacity(100)">1</button>'
++'</div>'
++'</div>'
+
+// Bug table with checkboxes
++ (bugs.length > 0 ?
+('<div class="section-title">Bug \u6807\u8bb0\u5217\u8868 ('+bugs.length+')</div>'
++'<table class="bug-table"><thead><tr><th></th><th>#ID</th><th>\u5750\u6807\u4f4d\u7f6e</th><th>\u63cf\u8ff0</th></tr></thead><tbody>'+bugRows+'</tbody></table>')
+: '')
+
+// Footer
++'<div class="footer">UI-REL Plugin v1.0 &middot; '+dateStr+'</div>'
++'</div>'
+
+// Inline script - split tag to avoid closing current script context
++'<script>'
++ inlineJs
++'<' + '/script><' + '/body><' + '/html>';
+
+    return html;
+}
+</script>
 </head>
 <body>
 
@@ -838,8 +1177,8 @@
             </button>
         </div>
 
-        <!-- Screenshot Upload -->
-        <div class="sidebar-section">
+        <!-- Screenshot Upload (全局上传区，仅单模式时使用；多模式时隐藏) -->
+        <div class="sidebar-section" id="globalScreenshotSection">
             <div class="sidebar-label">实机截图</div>
             <div class="upload-zone" id="uploadArea">
                 <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -853,10 +1192,11 @@
             <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp">
         </div>
 
-        <!-- Mini Previews -->
+        <!-- Mini Previews (single mode fallback) -->
         <div class="sidebar-section" id="previewSection" style="display:none;">
             <div class="sidebar-label">预览缩略图</div>
-            <div class="mini-preview-row">
+            <!-- Single mode: one pair of previews -->
+            <div class="mini-preview-row" id="singlePreviewRow">
                 <div class="mini-preview-item">
                     <div class="mini-preview-img-wrap"><img class="mini-preview-img" id="designPreview"></div>
                     <div class="mini-preview-label badge-design">设计稿 <span id="designSize">-</span></div>
@@ -866,6 +1206,8 @@
                     <div class="mini-preview-label badge-shot">截图 <span id="screenshotSize">-</span></div>
                 </div>
             </div>
+            <!-- Multi mode: list of preview pairs -->
+            <div class="preview-pair-list" id="multiPreviewList"></div>
         </div>
 
         <!-- Bug List -->
@@ -954,7 +1296,7 @@
                     <button class="v-btn" data-mode="sidebyside">并排</button>
                     <button class="v-btn" data-mode="diffonly">仅差异</button>
                 </div>
-                <div class="slider-group">
+                <div class="slider-group" id="sensitivityGroup" style="display:none;">
                     <label>灵敏度</label>
                     <input type="range" id="sensitivitySlider" min="5" max="80" value="30">
                     <span class="slider-val" id="sensitivityValue">30</span>
@@ -974,8 +1316,8 @@
                     导出报告
                 </button>
                 <button class="btn-action danger-style" id="resetBtn">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                    重置
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    删除
                 </button>
             </div>
         </div>
@@ -1007,12 +1349,16 @@ let state = {
     bugs: [],              // [{id, x, y, text, canvasX, canvasY}]
     nextBugId: 1,
     isMarkMode: false,
-    editingBugId: null,   // currently editing in panel
+    editingBugId: null,   // currently editing in panel (real id or '__pending__')
+    _pendingBug: null,    // unsaved bug waiting for description
     // Canvas display scale for coordinate conversion
     _canvasScaleX: 1,
     _canvasScaleY: 1,
     _canvasOffsetX: 0,
-    _canvasOffsetY: 0
+    _canvasOffsetY: 0,
+    // Multi-pair support: each entry = one (design + screenshot) comparison pair
+    comparePairs: [],      // [{designDataUrl, frameName, dw, dh, designImg, screenshotDataUrl, sw, sh, screenshotImg, diffData, bugs}]
+    activePairIndex: -1   // current active pair index
 };
 
 window.addEventListener('message', (event) => {
@@ -1029,6 +1375,41 @@ window.addEventListener('message', (event) => {
     switch (type) {
         case 'design-captured':
             handleDesignCaptured(data);
+            break;
+        case 'design-captured-batch':
+            handleDesignCapturedBatch(data);
+            break;
+        case 'batch-capture-start':
+            showBatchProgress(data.count);
+            break;
+        case 'batch-capture-progress':
+            updateBatchProgress(data.current, data.total, data.frameName);
+            break;
+        case 'batch-capture-complete':
+            hideBatchProgress();
+            
+            // Restore select button state
+            var sbtn = document.getElementById('selectFrameBtn');
+            if (sbtn && !sbtn.classList.contains('captured')) {
+                sbtn.disabled = false;
+                sbtn.className = 'btn-select-frame captured';
+                sbtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg> 已捕获 ' + data.count + ' 个设计稿';
+                sbtn.disabled = true;
+            }
+            
+            showStatus('成功捕获 ' + data.count + ' 个设计稿！点击左侧缩略图可切换查看', 'success');
+            
+            // After batch capture, auto-select first pair
+            if (state.comparePairs.length > 0) switchToPair(0);
+            break;
+        case 'batch-capture-error':
+            showStatus('捕获 "' + data.frameName + '" 失败: ' + data.error, 'error');
+            break;
+        case 'multi-selection-detected':
+            showMultiCaptureOption(data.data);
+            // 回传已捕获的 frameName 列表，让插件只发送新增的
+            var capturedNames = state.comparePairs.map(function(p) { return p.frameName; });
+            parent.postMessage({ pluginMessage: { type: 'captured-frame-names', names: capturedNames } }, '*');
             break;
         case 'error':
             showStatus(data.message, 'error');
@@ -1047,7 +1428,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fileInput').addEventListener('change', handleFileUpload);
     document.getElementById('compareBtn').addEventListener('click', startComparison);
     document.getElementById('exportBtn').addEventListener('click', exportResult);
-    document.getElementById('resetBtn').addEventListener('click', resetAll);
+    document.getElementById('resetBtn').addEventListener('click', deleteCurrentPair);
 
     document.querySelectorAll('.v-btn').forEach(btn => {
         btn.addEventListener('click', () => setViewMode(btn.dataset.mode));
@@ -1058,8 +1439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('opToggleSwap').addEventListener('click', toggleOpacity);
 
-    // Bug marking system
-    // markBugBtn removed - direct click-to-mark after analysis
+    // Bug marking system: direct click-to-mark after analysis
     // Mark mode is auto-enabled when results are shown
     document.getElementById('bugPanelSave').addEventListener('click', saveBugAnnotation);
     document.getElementById('bugPanelDel').addEventListener('click', deleteBugFromPanel);
@@ -1069,17 +1449,38 @@ document.addEventListener('DOMContentLoaded', () => {
     var containerEl = document.getElementById('canvasContainer');
     containerEl.addEventListener('click', onContainerClick);
 
+    // Enter loading state before requesting selection (capture may start immediately)
+    enterCaptureLoading();
     parent.postMessage({ pluginMessage: { type: 'request-current-selection' } }, '*');
 });
 
+function enterCaptureLoading() {
+    var btn = document.getElementById('selectFrameBtn');
+    if (!btn || btn.classList.contains('captured')) return; // don't override already-captured
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 捕获中...';
+}
+
 function selectFrame() {
-    showStatus('请在 Figma 中选择一个 Frame...', 'info');
+    showStatus('正在捕获设计稿，请稍候...', 'info');
+    enterCaptureLoading();
     parent.postMessage({ pluginMessage: { type: 'select-frame' } }, '*');
+}
+
+function exitCaptureLoading() {
+    var btn = document.getElementById('selectFrameBtn');
+    if (!btn) return;
+    // Only restore if still in loading state (not already captured)
+    if (btn.classList.contains('captured')) return;
+    btn.disabled = false;
+    btn.className = 'btn-select-frame';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/></svg> 选择 Figma Frame';
 }
 
 function handleDesignCaptured(data) {
     if (!data || !data.imageDataUrl) {
         showStatus('未能获取设计稿图片，请确认已选中有效的 Frame', 'error');
+        exitCaptureLoading();
         return;
     }
 
@@ -1090,28 +1491,468 @@ function handleDesignCaptured(data) {
         state.designHeight = img.height;
         state.selectedFrameName = data.frameName || 'Selected Frame';
 
-        document.getElementById('frameSelector').className = 'frame-card active';
-        document.getElementById('frameSelector').innerHTML =
-            '<div class="frame-info-row">' +
-            '<div class="frame-icon-sm">F</div>' +
-            '<div><div class="frame-name-text">' + escapeHtml(state.selectedFrameName) + '</div>' +
-            '<div class="frame-dims">' + img.width + ' x ' + img.height + ' px</div></div>' +
-            '</div>';
+        // Create or update pair in comparePairs
+        if (state.comparePairs.length === 0) {
+            // Single mode: create first pair with just design
+            state.comparePairs.push({
+                designDataUrl: data.imageDataUrl,
+                frameName: data.frameName || 'Selected Frame',
+                dw: img.width,
+                dh: img.height,
+                designImg: img,
+                screenshotDataUrl: null,
+                sw: 0,
+                sh: 0,
+                screenshotImg: null,
+                diffData: null,
+                bugs: []
+            });
+            state.activePairIndex = 0;
+        } else if (state.activePairIndex >= 0) {
+            // Update current active pair's design
+            var p = state.comparePairs[state.activePairIndex];
+            p.designDataUrl = data.imageDataUrl;
+            p.frameName = data.frameName || 'Selected Frame';
+            p.dw = img.width; p.dh = img.height;
+            p.designImg = img;
+        }
+
+        updateFrameCardUI(state.selectedFrameName, img.width, img.height);
 
         const btn = document.getElementById('selectFrameBtn');
         btn.className = 'btn-select-frame captured';
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg> 已捕获设计稿';
         btn.disabled = true;
 
-        document.getElementById('designPreview').src = data.imageDataUrl;
-        document.getElementById('designSize').textContent = img.width + '\u00d7' + img.height;
+        // 统一使用列表项渲染（单模式也用多模式样式）
+        document.getElementById('singlePreviewRow').style.display = 'none';
+        document.getElementById('globalScreenshotSection').style.display = 'none';
         document.getElementById('previewSection').style.display = 'block';
+        refreshMultiPreviewList();
 
         showStatus('\u6210\u529f\u6355\u83b7\u8bbe\u8ba1\u7a3f: ' + state.selectedFrameName + ' (' + img.width + '\u00d7' + img.height + ')', 'success');
         checkReadyToCompare();
     };
     img.onerror = function(e) { console.error('[UI] Image load error:', e); };
     img.src = data.imageDataUrl;
+}
+
+// 公共方法：更新 Frame 卡片 UI
+function updateFrameCardUI(frameName, w, h) {
+    document.getElementById('frameSelector').className = 'frame-card active';
+    document.getElementById('frameSelector').innerHTML =
+        '<div class="frame-info-row">' +
+        '<div class="frame-icon-sm">F</div>' +
+        '<div><div class="frame-name-text">' + escapeHtml(frameName) + '</div>' +
+        '<div class="frame-dims">' + w + ' x ' + h + ' px</div></div>' +
+        '</div>';
+}
+
+// ============================================
+// 多设计稿 / 多组对比 支持
+// ============================================
+
+// 处理批量捕获的单个设计稿
+function handleDesignCapturedBatch(data) {
+    if (!data || !data.imageDataUrl) return;
+
+    // 去重：检查同名 frame 是否已存在
+    var frameName = data.frameName || ('Frame ' + data.index);
+    var exists = state.comparePairs.some(function(p) { return p.frameName === frameName; });
+    if (exists) return; // 已存在则跳过
+
+    const img = new Image();
+    img.onload = () => {
+        state.comparePairs.push({
+            designDataUrl: data.imageDataUrl,
+            frameName: frameName,
+            dw: data.width, dh: data.height,
+            designImg: img,
+            screenshotDataUrl: null,
+            sw: 0, sh: 0,
+            screenshotImg: null,
+            diffData: null,
+            bugs: []
+        });
+        refreshMultiPreviewList();
+        showStatus('捕获设计稿: ' + frameName, 'success');
+    };
+    img.src = data.imageDataUrl;
+}
+
+// 检测到多选时进入 loading 并自动开始批量捕获
+function showMultiCaptureOption(data) {
+    var count = (data && data.count) || 0;
+
+    // Hide single preview, prepare for multi
+    document.getElementById('singlePreviewRow').style.display = 'none';
+
+    showStatus('正在捕获 ' + count + ' 个设计稿...', 'info');
+}
+
+function showBatchProgress(total) {
+    total = total || 0;
+    var container = document.getElementById('canvasContainer');
+    var existing = document.getElementById('batchProgressToast');
+    if (existing) existing.remove();
+    
+    var toast = document.createElement('div');
+    toast.id = 'batchProgressToast';
+    toast.className = 'batch-progress-toast';
+    toast.innerHTML =
+        '<div class="batch-progress-inner">' +
+        '<div class="batch-spinner"></div>' +
+        '<div class="batch-progress-text">正在捕获设计稿...</div>' +
+        '<div class="batch-progress-sub" id="batchProgressSub">准备中...</div>' +
+        '</div>';
+    container.appendChild(toast);
+}
+
+function updateBatchProgress(current, total, name) {
+    var el = document.getElementById('batchProgressSub');
+    if (el) el.textContent = current + ' / ' + total + ' - ' + (name || '');
+}
+
+function hideBatchProgress() {
+    var el = document.getElementById('batchProgressToast');
+    if (el) el.remove();
+}
+
+// 刷新左侧多组预览列表
+function refreshMultiPreviewList() {
+    var listEl = document.getElementById('multiPreviewList');
+    var previewSection = document.getElementById('previewSection');
+    
+    // Always show preview section when we have data
+    previewSection.style.display = '';
+    listEl.innerHTML = '';
+
+    if (state.comparePairs.length <= 1) {
+        // Single mode - 也使用多模式的列表项样式（右侧内嵌上传/缩略图）
+        document.getElementById('singlePreviewRow').style.display = 'none';
+        var globalSS = document.getElementById('globalScreenshotSection');
+        if (globalSS) globalSS.style.display = 'none';
+        var label = document.querySelector('#previewSection .sidebar-label');
+        if (label) label.textContent = '预览缩略图';
+        // 不 return，继续往下走统一个列表项渲染
+    }
+
+    // Multi mode - ensure section is visible!
+    previewSection.style.display = '';
+    document.getElementById('singlePreviewRow').style.display = 'none';
+
+    // 多模式时隐藏全局截图上传区域（截图上传已移至每项右侧）
+    var globalSS = document.getElementById('globalScreenshotSection');
+    if (globalSS) globalSS.style.display = 'none';
+    
+    var label = document.querySelector('#previewSection .sidebar-label');
+    if (label && !label.textContent.match(/\(/)) {
+        label.innerHTML = '预览缩略图 <span style="color:var(--accent);font-weight:600;">(' + state.comparePairs.length + ')</span>';
+    } else if (label) {
+        label.innerHTML = '预览缩略图 <span style="color:var(--accent);font-weight:600;">(' + state.comparePairs.length + ')</span>';
+    }
+
+    state.comparePairs.forEach(function(pair, idx) {
+        var item = document.createElement('div');
+        item.className = 'preview-pair-item' + (idx === state.activePairIndex ? ' active' : '');
+        item.setAttribute('data-pair-index', idx);
+
+        // Determine status text
+        var statusText = '';
+        var statusClass = '';
+        if (pair.diffData) {
+            statusText = '已分析';
+            statusClass = 'style="color:var(--success);"';
+        } else if (pair.screenshotImg) {
+            statusText = '待分析';
+            statusClass = 'style="color:var(--warning);"';
+        } else {
+            statusText = '缺截图';
+            statusClass = 'style="color:var(--fg-muted);cursor:pointer;"';
+            isDeleteBadge = true;
+        }
+
+        item.innerHTML =
+            '<div class="preview-pair-label-row">' +
+            '<span class="preview-pair-name" title="' + escapeHtml(pair.frameName) + '">' + escapeHtml(pair.frameName) + '</span>' +
+            (isDeleteBadge
+                ? '<span class="preview-pair-badge delete-badge" data-delete-idx="' + idx + '" title="点击删除此项" style="color:var(--danger);background:rgba(220,38,38,0.08);cursor:pointer;">' +
+                  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>'
+                : '<span class="preview-pair-badge" ' + statusClass + '>' + statusText + '</span>'
+            ) +
+            '</div>' +
+            '<div class="mini-preview-item">' +
+            '<div class="mini-preview-img-wrap"><img class="mini-preview-img" src="' + (pair.designDataUrl || '') + '" alt=""></div>' +
+            '<div class="mini-preview-label badge-design">' + pair.dw + '\u00d7' + pair.dh + '</div>' +
+            '</div>' +
+            // 右侧：截图上传/缩略图区域（使用与左侧相同的 mini-preview 结构）
+            (pair.screenshotImg ?
+                '<div class="mini-preview-item mini-preview-screenshot">' +
+                '<div class="mini-preview-img-wrap"><img class="mini-preview-img" src="' + pair.screenshotDataUrl + '" alt="截图"></div>' +
+                '<div class="mini-preview-label badge-screenshot">' + pair.sw + '\u00d7' + pair.sh + '</div>' +
+                '</div>'
+            :
+                '<div class="mini-preview-item mini-preview-upload-zone" data-pair-idx="' + idx + '" title="点击或拖拽上传截图">' +
+                '<div class="mini-preview-img-wrap upload-placeholder">' +
+                '<svg class="upload-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
+                '<span class="upload-placeholder-text">上传截图</span>' +
+                '</div>' +
+                '<div class="mini-preview-label badge-screenshot">-</div>' +
+                '<input type="file" class="pair-file-input" data-pair-idx="' + idx + '" accept="image/png,image/jpeg,image/webp" style="display:none;">' +
+                '</div>'
+            );
+
+        item.addEventListener('click', function(e) {
+            // 如果点击的是截图上传/缩略图区域，不触发切换
+            var target = e.target;
+            while (target && target !== item) {
+                if (target.classList.contains('mini-preview-upload-zone') ||
+                    target.classList.contains('mini-preview-screenshot') ||
+                    target.classList.contains('upload-placeholder')) {
+                    return; // 由下面单独的事件处理
+                }
+                target = target.parentElement;
+            }
+            switchToPair(idx);
+        });
+
+        // 绑定每项的截图上传事件
+        var uploadEl = item.querySelector('.mini-preview-upload-zone');
+        var fileInputEl = item.querySelector('.pair-file-input');
+
+        if (uploadEl) {
+            // 点击上传区域触发文件选择
+            uploadEl.addEventListener('click', function(e) { e.stopPropagation(); fileInputEl.click(); });
+            // 拖拽支持
+            ['dragenter', 'dragover'].forEach(function(name) {
+                uploadEl.addEventListener(name, function(e) { e.preventDefault(); e.stopPropagation(); uploadEl.classList.add('drag-over'); });
+            });
+            ['dragleave', 'drop'].forEach(function(name) {
+                uploadEl.addEventListener(name, function(e) { e.preventDefault(); e.stopPropagation(); uploadEl.classList.remove('drag-over'); });
+            });
+            uploadEl.addEventListener('drop', function(e) {
+                e.stopPropagation();
+                if (e.dataTransfer.files.length > 0) processFileForPair(e.dataTransfer.files[0], idx);
+            });
+            // 文件选择变化
+            if (fileInputEl) fileInputEl.addEventListener('change', function(e) {
+                e.stopPropagation();
+                if (e.target.files[0]) processFileForPair(e.target.files[0], idx);
+                this.value = ''; // reset so same file can be re-selected
+            });
+        }
+
+        // ===== 叉号删除按钮 =====
+        var deleteBadge = item.querySelector('.delete-badge');
+        if (deleteBadge) {
+            deleteBadge.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var delIdx = parseInt(this.getAttribute('data-delete-idx'));
+                performDeletePair(item, delIdx);
+            });
+        }
+
+        // ===== 滑动删除（左滑）=====
+        var startX = 0, currentX = 0, isDragging = false, swiped = false;
+        var THRESHOLD = 80; // 触发删除的滑动距离
+
+        item.addEventListener('touchstart', function(e) {
+            startX = e.touches[0].clientX;
+            isDragging = true; swiped = false;
+            item.classList.add('swiping');
+        }, { passive: true });
+
+        item.addEventListener('touchmove', function(e) {
+            if (!isDragging) return;
+            currentX = e.touches[0].clientX;
+            var dx = currentX - startX;
+
+            if (dx < -10) {
+                // 向左滑动
+                e.preventDefault(); // 阻止列表滚动
+                var translateX = Math.max(dx, -item.offsetWidth * 0.8);
+                item.style.transform = 'translateX(' + translateX + 'px)';
+                item.style.opacity = Math.max(1 + dx / (item.offsetWidth * 1.5), 0.2);
+                if (Math.abs(dx) > THRESHOLD && !swiped) {
+                    swiped = true;
+                    // 背景变红提示
+                    item.style.background = 'rgba(220,38,38,0.08)';
+                    item.style.borderColor = 'rgba(220,38,38,0.3)';
+                } else if (!swiped) {
+                    item.style.background = '';
+                    item.style.borderColor = '';
+                }
+            }
+        }, { passive: false });
+
+        item.addEventListener('touchend', function(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            item.classList.remove('swiping');
+            var dx = currentX - startX || 0;
+
+            if (swiped && Math.abs(dx) > THRESHOLD) {
+                // 达到阈值 → 执行删除（performDeletePair 内部处理两阶段动画）
+                performDeletePair(item, idx);
+            } else {
+                // 没达到阈值 → 弹回原位
+                item.style.transform = '';
+                item.style.opacity = '';
+                item.style.background = '';
+                item.style.borderColor = '';
+            }
+            startX = 0; currentX = 0;
+        }, { passive: true });
+
+        // 鼠标拖拽也支持（PC 端）
+        var mouseStartX = 0, mouseCurrentX = 0, mouseDragging = false, mouseSwiped = false;
+        item.addEventListener('mousedown', function(e) {
+            // 忽略按钮和上传区域的点击
+            if (e.target.closest('.mini-preview-upload-zone') || e.target.closest('.mini-preview-screenshot')) return;
+            mouseStartX = e.clientX;
+            mouseDragging = true; mouseSwiped = false;
+            item.classList.add('swiping');
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!mouseDragging || !item.parentElement) return;
+            mouseCurrentX = e.clientX;
+            var dx = mouseCurrentX - mouseStartX;
+
+            if (dx < -10) {
+                var translateX = Math.max(dx, -item.offsetWidth * 0.8);
+                item.style.transform = 'translateX(' + translateX + 'px)';
+                item.style.opacity = Math.max(1 + dx / (item.offsetWidth * 1.5), 0.2);
+                if (Math.abs(dx) > THRESHOLD && !mouseSwiped) {
+                    mouseSwiped = true;
+                    item.style.background = 'rgba(220,38,38,0.08)';
+                    item.style.borderColor = 'rgba(220,38,38,0.3)';
+                } else if (!mouseSwiped) {
+                    item.style.background = '';
+                    item.style.borderColor = '';
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (!mouseDragging) return;
+            mouseDragging = false;
+            item.classList.remove('swiping');
+            var dx = mouseCurrentX - mouseStartX || 0;
+
+            if (mouseSwiped && Math.abs(dx) > THRESHOLD) {
+                performDeletePair(item, idx);
+            } else {
+                item.style.transform = '';
+                item.style.opacity = '';
+                item.style.background = '';
+                item.style.borderColor = '';
+            }
+            mouseStartX = 0; mouseCurrentX = 0;
+        });
+
+        listEl.appendChild(item);
+    });
+}
+
+// 切换到指定的对比组
+function switchToPair(index) {
+    if (index < 0 || index >= state.comparePairs.length) return;
+
+    var pair = state.comparePairs[index];
+    state.activePairIndex = index;
+
+    // Restore design data to working state
+    state.designImage = pair.designImg;
+    state.designWidth = pair.dw;
+    state.designHeight = pair.dh;
+    state.selectedFrameName = pair.frameName;
+
+    // Restore screenshot data
+    if (pair.screenshotImg) {
+        state.screenshotImage = pair.screenshotImg;
+        state.screenshotWidth = pair.sw;
+        state.screenshotHeight = pair.sh;
+    } else {
+        state.screenshotImage = null;
+        state.screenshotWidth = 0;
+        state.screenshotHeight = 0;
+    }
+
+    // Restore diff data and bugs if analyzed
+    if (pair.diffData) {
+        state.diffData = pair.diffData;
+        state.bugs = [...(pair.bugs || [])];
+        
+        // Show results area with cached data
+        document.getElementById('resultSection').classList.add('visible');
+        document.getElementById('canvasPlaceholder').style.display = 'none';
+        var cvs = document.getElementById('comparisonCanvas');
+        cvs.style.display = 'block';
+
+        // Re-render comparison from cached diffData
+        renderComparison();
+
+        // Restore stat values from this pair's diffData
+        var dp = (pair.diffData.diffPixelCount / pair.diffData.totalPixels * 100).toFixed(2);
+        document.getElementById('diffPercent').textContent = dp + '%';
+        document.getElementById('diffPixels').textContent = formatNumber(pair.diffData.diffPixelCount);
+        document.getElementById('similarityScore').textContent = (100 - parseFloat(dp)).toFixed(2) + '%';
+
+        var compareBtn = document.getElementById('compareBtn');
+        compareBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg> 分析完成';
+        compareBtn.disabled = false;
+
+        enableMarkMode();
+    } else {
+        // No analysis yet for this pair
+        resetComparisonResultsOnly();
+    }
+
+    // Update sidebar UI
+    updateFrameCardUI(pair.frameName, pair.dw, pair.dh);
+    
+    // Ensure preview section is visible (critical for list display)
+    document.getElementById('previewSection').style.display = '';
+
+    // 单模式也用列表项渲染，隐藏全局上传区（列表项右侧已有内嵌上传按钮）
+    document.getElementById('globalScreenshotSection').style.display = 'none';
+    document.getElementById('singlePreviewRow').style.display = 'none';
+
+    // Highlight in list
+    refreshMultiPreviewList();
+
+    checkReadyToCompare();
+}
+
+// 检查是否准备好进行对比
+function checkReadyToCompare() {
+    var compareBtn = document.getElementById('compareBtn');
+    if (compareBtn) {
+        compareBtn.disabled = !(state.designImage && state.screenshotImage);
+    }
+}
+
+// 只重置对比结果（不重置图片数据）- 用于切换组时
+function resetComparisonResultsOnly() {
+    state.diffData = null;
+    state.bugs = [];
+    state.nextBugId = 1;
+
+    document.getElementById('resultSection').classList.remove('visible');
+    document.getElementById('canvasPlaceholder').style.display = 'flex';
+    document.getElementById('comparisonCanvas').style.display = 'none';
+    document.getElementById('bugMarkerOverlay').innerHTML = '';
+    document.getElementById('bugCountBadge').textContent = '0';
+
+    disableMarkMode();
+    hideBugPanel();
+
+    var compareBtn = document.getElementById('compareBtn');
+    compareBtn.disabled = !(state.designImage && state.screenshotImage);
+    compareBtn.innerHTML =
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>'
+        + ' 开始差异分析';
 }
 
 function setupDragDrop() {
@@ -1142,29 +1983,136 @@ function processFile(file) {
         showStatus('请上传 PNG、JPG 或 WEBP 格式的图片', 'error');
         return;
     }
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-            state.screenshotImage = img;
-            state.screenshotWidth = img.width;
-            state.screenshotHeight = img.height;
-            document.getElementById('uploadArea').style.display = 'none';
-            document.getElementById('screenshotPreview').src = e.target.result;
-            document.getElementById('screenshotSize').textContent = img.width + '\u00d7' + img.height;
-            showStatus('\u622a\u56fe\u4e0a\u4f20\u6210\u529f (' + img.width + '\u00d7' + img.height + ')', 'success');
-            checkReadyToCompare();
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+    // 如果没有选中的对，自动选择第一个
+    if (state.activePairIndex < 0 && state.comparePairs.length > 0) {
+        switchToPair(0);
+    }
+    if (state.activePairIndex >= 0) { processFileForPair(file, state.activePairIndex); }
+    else { showStatus('请先捕获设计稿，再上传截图', 'error'); }
 }
 
-function checkReadyToCompare() {
-    if (state.designImage && state.screenshotImage) {
-        document.getElementById('compareBtn').disabled = false;
+function processFileForPair(file, pairIdx) {
+    if (!file.type.match(/image\/(png|jpeg|webp)/)) { showStatus('请上传 PNG、JPG 或 WEBP 格式的图片', 'error'); return; }
+
+    var t0 = performance.now();
+    console.log('[上传诊断] 开始处理文件:', file.name, '大小:', (file.size / 1024 / 1024).toFixed(2) + 'MB', '时间:', t0.toFixed(0) + 'ms');
+
+    // 使用 createObjectURL 代替 FileReader - 速度提升 10-50 倍
+    const objectURL = URL.createObjectURL(file);
+    console.log('[上传诊断] createObjectURL 耗时:', (performance.now() - t0).toFixed(1) + 'ms');
+
+    const img = new Image();
+
+    img.onload = function() {
+        var t1 = performance.now();
+        console.log('[上传诊断] Image.onload 触发, 图片解码耗时:', (t1 - t0).toFixed(1) + 'ms', '尺寸:', img.width + 'x' + img.height);
+
+        var pair = state.comparePairs[pairIdx];
+        if (!pair) {
+            URL.revokeObjectURL(objectURL);
+            return;
+        }
+
+        // 清理旧的 Object URL（如果存在）
+        if (pair.screenshotDataUrl && pair.screenshotDataUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(pair.screenshotDataUrl);
+        }
+
+        pair.screenshotDataUrl = objectURL;
+        pair.sw = img.width;
+        pair.sh = img.height;
+        pair.screenshotImg = img;
+
+        if (state.activePairIndex === pairIdx) {
+            state.screenshotImage = img; state.screenshotWidth = img.width; state.screenshotHeight = img.height;
+
+            // 清理预览区的旧 URL
+            const prevPreview = document.getElementById('screenshotPreview').src;
+            if (prevPreview && prevPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(prevPreview);
+            }
+
+            // 隐藏上传区，显示截图预览
+            document.getElementById('uploadArea').style.display = 'none';
+            document.getElementById('screenshotPreview').src = objectURL;
+            document.getElementById('screenshotSize').textContent = img.width + '\u00d7' + img.height;
+            // 确保预览区域可见
+            document.getElementById('previewSection').style.display = 'block';
+            checkReadyToCompare();
+        }
+
+        showStatus('截图上传成功 (' + escapeHtml(pair.frameName) + ' ' + img.width + '\u00d7' + img.height + ')', 'success');
+        console.log('[上传诊断] 全部处理完成, 总耗时:', (performance.now() - t0).toFixed(1) + 'ms');
+
+        // 局部更新列表项，而非刷新整个列表
+        updatePairListItem(pairIdx);
+    };
+
+    img.onerror = function() {
+        URL.revokeObjectURL(objectURL);
+        console.error('[上传诊断] 图片加载错误, 耗时:', (performance.now() - t0).toFixed(1) + 'ms');
+        showStatus('图片加载失败', 'error');
+    };
+
+    img.src = objectURL;
+}
+
+/**
+ * 局部更新单个对比项的列表显示
+ */
+function updatePairListItem(pairIdx) {
+    const itemEl = document.querySelector('.preview-pair-item[data-pair-index="' + pairIdx + '"]');
+    if (!itemEl || !state.comparePairs[pairIdx]) return;
+
+    const pair = state.comparePairs[pairIdx];
+
+    // 更新状态徽章
+    var badgeEl = itemEl.querySelector('.preview-pair-badge');
+    if (badgeEl) {
+        if (pair.diffData) {
+            badgeEl.textContent = '已分析';
+            badgeEl.setAttribute('style', 'color:var(--success);');
+        } else if (pair.screenshotImg) {
+            badgeEl.textContent = '待分析';
+            badgeEl.setAttribute('style', 'color:var(--warning);');
+        } else {
+            // 叉号删除按钮
+            badgeEl.className = 'preview-pair-badge delete-badge';
+            badgeEl.setAttribute('data-delete-idx', pairIdx);
+            badgeEl.setAttribute('title', '点击删除此项');
+            badgeEl.setAttribute('style', 'color:var(--danger);background:rgba(220,38,38,0.08);cursor:pointer;');
+            badgeEl.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+            badgeEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+                performDeletePair(itemEl, pairIdx);
+            });
+        }
+    }
+
+    // 更新右侧截图区域：在"上传截图"按钮和缩略图之间切换
+    var screenshotArea = itemEl.querySelector('.mini-preview-upload-zone') || itemEl.querySelector('.mini-preview-screenshot');
+    if (!screenshotArea) return;
+
+    if (pair.screenshotImg && pair.screenshotDataUrl) {
+        // 有截图 → 显示缩略图
+        if (!screenshotArea.querySelector('.mini-preview-img[src*="screenshot"]')) {
+            screenshotArea.className = 'mini-preview-item mini-preview-screenshot';
+            screenshotArea.innerHTML =
+                '<div class="mini-preview-img-wrap"><img class="mini-preview-img" src="' + pair.screenshotDataUrl + '" alt="截图"></div>' +
+                '<div class="mini-preview-label badge-screenshot">' + pair.sw + '\u00d7' + pair.sh + '</div>';
+            // 重新绑定缩略图点击事件
+            var newThumb = screenshotArea;
+            if (newThumb) {
+                newThumb.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    switchToPair(pairIdx);
+                    document.getElementById('fileInput').click();
+                });
+            }
+        }
     }
 }
+
 
 function startComparison() {
     if (!state.designImage || !state.screenshotImage) {
@@ -1173,13 +2121,17 @@ function startComparison() {
     }
 
     if (state.designWidth !== state.screenshotWidth || state.designHeight !== state.screenshotHeight) {
-        showStatus(
-            '\u5c3a\u5bf8\u4e0d\u4e00\u81f4\uff01\u8bbe\u8ba1\u7a3f: ' + state.designWidth + '\u00d7' + state.designHeight +
-            '\uff0c\u622a\u56fe: ' + state.screenshotWidth + '\u00d7' + state.screenshotHeight +
-            '\u3002\u8bf7\u4e0a\u4f20\u76f8\u540c\u5c3a\u5bf8\u7684\u622a\u56fe\u3002',
-            'error'
-        );
-        return;
+        var msg =
+            '尺寸不一致！设计稿: ' + state.designWidth + '\u00d7' + state.designHeight +
+            '，截图: ' + state.screenshotWidth + '\u00d7' + state.screenshotHeight +
+            '。是否自动缩放适配后继续分析？';
+        if (confirm(msg)) {
+            autoResizeAndCompare();
+            return;
+        } else {
+            showStatus('已取消，请上传相同尺寸的截图', 'error');
+            return;
+        }
     }
 
     const btn = document.getElementById('compareBtn');
@@ -1189,6 +2141,14 @@ function startComparison() {
     setTimeout(function() {
         try {
             performComparison();
+            
+            // Cache diffData + bugs to current active pair
+            if (state.activePairIndex >= 0 && state.comparePairs[state.activePairIndex]) {
+                state.comparePairs[state.activePairIndex].diffData = state.diffData;
+                state.comparePairs[state.activePairIndex].bugs = [...state.bugs];
+                refreshMultiPreviewList(); // update list to reflect analyzed status
+            }
+
             document.getElementById('resultSection').classList.add('visible');
 
             // Show canvas, hide placeholder
@@ -1211,6 +2171,26 @@ function startComparison() {
                 ' 开始差异分析';
         }
     }, 100);
+}
+
+function autoResizeAndCompare() {
+    // 将截图缩放到设计稿尺寸
+    var tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = state.designWidth;
+    tmpCanvas.height = state.designHeight;
+    var tmpCtx = tmpCanvas.getContext('2d');
+    tmpCtx.drawImage(state.screenshotImage, 0, 0, state.designWidth, state.designHeight);
+
+    var resizedImg = new Image();
+    resizedImg.onload = function() {
+        state.screenshotImage = resizedImg;
+        state.screenshotWidth = resizedImg.width;
+        state.screenshotHeight = resizedImg.height;
+        showStatus('已自动缩放截图至 ' + resizedImg.width + '\u00d7' + resizedImg.height, 'info');
+        // 重新触发对比（此时尺寸一致，不会再进此分支）
+        startComparison();
+    };
+    resizedImg.src = tmpCanvas.toDataURL();
 }
 
 function performComparison() {
@@ -1342,39 +2322,6 @@ function renderComparison() {
     refreshBugDots();
 }
 
-function drawBugMarkersOnCanvas() {
-    if (!state.bugs.length) return;
-    var canvas = document.getElementById('comparisonCanvas');
-    var ctx = canvas.getContext('2d');
-
-    state.bugs.forEach(function(bug) {
-        var dx = bug.x * state._canvasScaleX;
-        var dy = bug.y * state._canvasScaleY;
-
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(dx, dy, 14, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,92,92,0.25)';
-        ctx.fill();
-
-        // Red circle
-        ctx.beginPath();
-        ctx.arc(dx, dy, 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#ff5c5c';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        // Number
-        ctx.font = 'bold 10px JetBrains Mono, monospace';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('' + bug.id, dx, dy + 0.5);
-    });
-}
-
 function renderHeatmap(ctx, w, h) {
     var d = state.diffData;
     ctx.putImageData(d.designImageData, 0, 0);
@@ -1435,9 +2382,11 @@ function getHeatmapColor(t) {
 function setViewMode(mode) {
     state.viewMode = mode;
     document.querySelectorAll('.v-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.mode===mode); });
-    // Show/hide opacity controls based on mode
+    // Show/hide controls based on mode
     var opGroup = document.getElementById('opacityGroup');
     if (opGroup) opGroup.style.display = (mode === 'overlay') ? 'flex' : 'none';
+    var senGroup = document.getElementById('sensitivityGroup');
+    if (senGroup) senGroup.style.display = (mode === 'heatmap' || mode === 'diffonly') ? 'flex' : 'none';
     renderComparison();
 }
 
@@ -1508,27 +2457,28 @@ function onContainerClick(e) {
     imgX = Math.max(0, Math.min(imgX, state.diffData.width));
     imgY = Math.max(0, Math.min(imgY, state.diffData.height));
 
-    // Create new bug
-    var bug = {
-        id: state.nextBugId++,
+    // Create a PENDING bug (NOT pushed to state.bugs yet)
+    // Only added to state.bugs after user saves with a description
+    var pendingBug = {
+        id: null,   // no id until saved
         x: imgX,
         y: imgY,
         text: '',
         displayX: clickX,
         displayY: clickY
     };
-    state.bugs.push(bug);
+    state._pendingBug = pendingBug;
 
     // Show annotation panel at this position
-    showBugPanel(bug, clickX, clickY);
+    showBugPanel(pendingBug, clickX, clickY);
 }
 
 function showBugPanel(bug, screenX, screenY) {
-    state.editingBugId = bug.id;
+    state.editingBugId = (bug.id != null) ? bug.id : '__pending__';
     var panel = document.getElementById('bugPanel');
     var container = document.getElementById('canvasContainer');
 
-    document.getElementById('bugPanelNum').textContent = bug.id;
+    document.getElementById('bugPanelNum').textContent = (bug.id != null && bug.id > 0) ? bug.id : '?';
     document.getElementById('bugPanelText').value = bug.text || '';
     document.getElementById('bugPanelDel').style.display = bug.text ? 'flex' : 'none';
 
@@ -1552,31 +2502,49 @@ function showBugPanel(bug, screenX, screenY) {
 
 function hideBugPanel() {
     document.getElementById('bugPanel').classList.remove('visible');
+    // If closing a pending (unsaved) bug, discard it
+    if (state.editingBugId === '__pending__') {
+        state._pendingBug = null;
+    }
     state.editingBugId = null;
 }
 
 function saveBugAnnotation() {
     var text = document.getElementById('bugPanelText').value.trim();
-    var bug = state.bugs.find(function(b) { return b.id === state.editingBugId; });
+
+    // Determine: editing an existing saved bug, or saving a new pending bug?
+    var isPending = (state.editingBugId === '__pending__');
+    var bug = isPending ? state._pendingBug : state.bugs.find(function(b) { return b.id === state.editingBugId; });
+
     if (!bug) return;
 
     if (!text) {
-        // No description — for new bugs delete, for existing bugs restore original text
-        if (bug.text) {
-            // Editing existing bug: restore original text, cancel edit
-            document.getElementById('bugPanelText').value = bug.text;
-            showStatus('描述不能为空，已恢复原文', 'error');
-            return;
-        } else {
-            // New bug with no text: delete it
-            deleteBugById(state.editingBugId);
+        if (isPending) {
+            // Pending bug with no text: discard silently
+            state._pendingBug = null;
             hideBugPanel();
             showStatus('已取消标记（无描述）', 'info');
+            return;
+        } else if (bug.text) {
+            // Editing existing bug with empty input: restore original text
+            document.getElementById('bugPanelText').value = bug.text;
+            showStatus('描述不能为空，已恢复原文', 'error');
             return;
         }
     }
 
-    bug.text = text;
+    if (isPending && text) {
+        // Promote pending bug to a real saved bug
+        bug.id = state.nextBugId++;
+        bug.text = text;
+        state.bugs.push(bug);       // NOW add to the official list
+        state._pendingBug = null;   // clear pending
+        state.editingBugId = bug.id; // update tracking reference
+    } else {
+        // Just updating an existing bug's description
+        bug.text = text;
+    }
+
     hideBugPanel();
     refreshBugList();
     refreshBugDots();
@@ -1600,6 +2568,12 @@ function deleteBugById(bugId) {
 
 function deleteBugFromPanel() {
     if (!state.editingBugId) return;
+    if (state.editingBugId === '__pending__') {
+        state._pendingBug = null;
+        hideBugPanel();
+        showStatus('已取消标记', 'info');
+        return;
+    }
     deleteBugById(state.editingBugId);
     hideBugPanel();
     refreshBugList();
@@ -1636,8 +2610,9 @@ function refreshBugDots() {
         dot.style.left = dotX + 'px';
         dot.style.top = dotY + 'px';
         dot.dataset.bugId = bug.id;
-        dot.innerHTML = '<div class="bug-dot-inner">' + bug.id + '</div>';
-        dot.title = 'Bug #' + bug.id + ': ' + (bug.text || '(点击编辑)');
+        var label = bug.id > 0 ? bug.id : '?';
+        dot.innerHTML = '<div class="bug-dot-inner">' + label + '</div>';
+        dot.title = bug.id > 0 ? ('Bug #' + bug.id + ': ' + (bug.text || '(点击编辑)')) : '(未保存的标记)';
         dot.addEventListener('click', function(e) {
             e.stopPropagation(); // prevent bubbling to canvas
             e.preventDefault();
@@ -1653,7 +2628,7 @@ function refreshBugDots() {
 }
 
 function openBugForEdit(bugId, screenX, screenY) {
-    var bug = state.bugs.find(function(b) { return b.id === bugId; });
+    var bug = (bugId === '__pending__') ? state._pendingBug : state.bugs.find(function(b) { return b.id === bugId; });
     if (!bug) return;
     // Use stored display position or calculate fresh
     if (screenX === undefined) {
@@ -1674,8 +2649,9 @@ function refreshBugList() {
     state.bugs.forEach(function(bug) {
         var item = document.createElement('div');
         item.className = 'bug-list-item';
+        var label = bug.id > 0 ? '#' + bug.id : '?';
         item.innerHTML =
-            '<div class="bug-list-num">' + bug.id + '</div>' +
+            '<div class="bug-list-num">' + label + '</div>' +
             '<div class="bug-list-text">' + escapeHtml(bug.text || '(\u65e0\u63cf\u8ff0)') + '</div>';
         item.addEventListener('click', function() { openBugForEdit(bug.id); });
         container.appendChild(item);
@@ -1686,194 +2662,28 @@ function refreshBugList() {
 function exportResult() {
     if (!state.diffData) return;
 
-    // Generate overlay canvas (design + screenshot with opacity) as the main image
-    var overlayCanvas = document.createElement('canvas');
-    overlayCanvas.width = state.diffData.width;
-    overlayCanvas.height = state.diffData.height;
-    var oCtx = overlayCanvas.getContext('2d');
-    oCtx.putImageData(state.diffData.designImageData, 0, 0);
-    oCtx.globalAlpha = state.opacity / 100;
-    var tmpCv = document.createElement('canvas'); tmpCv.width=state.diffData.width; tmpCv.height=state.diffData.height;
-    tmpCv.getContext('2d').putImageData(state.diffData.screenshotImageData, 0, 0);
-    oCtx.drawImage(tmpCv, 0, 0);
-    oCtx.globalAlpha = 1;
+    // Generate design image and screenshot as separate data URLs (dual-layer overlay in report)
+    var designCanvas = document.createElement('canvas');
+    designCanvas.width = state.diffData.width;
+    designCanvas.height = state.diffData.height;
+    designCanvas.getContext('2d').putImageData(state.diffData.designImageData, 0, 0);
+    var designImgUrl = designCanvas.toDataURL('image/png');
 
-    // Do NOT draw bug markers on the image - use DOM overlay instead (for CSS hover animation)
-    var mainImgUrl = overlayCanvas.toDataURL('image/png');
+    var screenshotCanvas = document.createElement('canvas');
+    screenshotCanvas.width = state.diffData.width;
+    screenshotCanvas.height = state.diffData.height;
+    screenshotCanvas.getContext('2d').putImageData(state.diffData.screenshotImageData, 0, 0);
+    var screenshotImgUrl = screenshotCanvas.toDataURL('image/png');
 
-    // Build DOM marker elements for each bug (positioned over the image)
-    var imgW = state.diffData.width;
-    var imgH = state.diffData.height;
-
-    var bugDomMarkers = '';
-    state.bugs.forEach(function(bug) {
-        var pctX = Math.round(bug.x / imgW * 10000) / 100; // percent with 2 decimals
-        var pctY = Math.round(bug.y / imgH * 10000) / 100;
-        var labelText = escapeHtml('#' + bug.id + (bug.text ? ' ' + bug.text : ''));
-        bugDomMarkers +=
-            '<div class="r-bug-marker" style="left:' + pctX + '%;top:' + pctY + '%;" data-id="' + bug.id + '">' +
-            '<div class="r-bug-dot">' +
-            '<div class="r-bug-num">' + bug.id + '</div>' +
-            '</div>' +
-            (bug.text ? '<div class="r-bug-label">' + labelText + '</div>' : '') +
-            '</div>';
+    // --- Delegate to report template generator ---
+    var html = generateReportHtml({
+        designImgUrl: designImgUrl,
+        screenshotImgUrl: screenshotImgUrl,
+        bugs: state.bugs,
+        diffData: state.diffData,
+        opacity: state.opacity,
+        frameName: state.selectedFrameName
     });
-
-    // Bug list HTML with checkboxes
-    var bugRows = '';
-    if (state.bugs.length > 0) {
-        state.bugs.forEach(function(bug) {
-            bugRows +=
-                '<tr data-bug-id="' + bug.id + '">' +
-                '<td style="width:36px;"><input type="checkbox" class="r-bug-cb" checked data-bug-id="' + bug.id + '" /></td>' +
-                '<td style="color:#ff5c5c;font-weight:700;width:50px;" class="r-bug-id-td">#' + bug.id + '</td>' +
-                '<td style="font-family:monospace;font-size:12px;color:#8888a0;width:90px;">(' + bug.x + ', ' + bug.y + ')</td>' +
-                '<td>' + escapeHtml(bug.text || '-') + '</td>' +
-                '</tr>';
-        });
-    }
-
-    var now = new Date();
-    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-
-    // --- Build full report HTML ---
-    var html =
-'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>UI-REL Report</title>'
-+
-'<style>'
-+
-'*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;line-height:1.6;padding:40px 20px;transition:background .25s,color .25s,border-color .25s;}'
-+ 'body.dark{background:#16162a;color:#d0d0dc;}'
-+ 'body.dark .header{border-color:#6c5ce7;}'
-+ 'body.dark .header h1{color:#e0e0e8;}'
-+ 'body.dark .meta{color:#777;}'
-+ 'body.dark .stat-card{background:#22223a;border-color:#333355;}'
-+ 'body.dark .stat-lbl{color:#888;}'
-+ 'body.dark .section-title{color:#d0d0dc;}'
-+ 'body.dark .main-img-wrap img{border-color:#333355;}'
-+ 'body.dark .img-controls{background:rgba(30,30,55,.7);}'
-+ 'body.dark .img-controls label{color:#999;}'
-+ 'body.dark .op-toggle{background:#2a2a45;border-color:#444;color:#aaa;}'
-+ 'body.dark .bug-table{background:#22223a;border-color:#333355;}'
-+ 'body.dark .bug-table th{background:#1a1a30;color:#999;border-color:#333355;}'
-+ 'body.dark .bug-table td{border-color:#2a2a48;color:#ccc;}'
-+ 'body.dark .bug-table tr:hover td{background:rgba(108,92,231,.08);}'
-+ 'body.dark .footer{border-color:#333355;color:#666;}'
-+'.report{max-width:960px;margin:0 auto;}'
-+'.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #6c5ce7;transition:border-color .25s;}'
-+'.header h1{font-size:22px;color:#333;display:flex;align-items:center;gap:10px;transition:color .25s;}'
-+'.header h1 span{background:linear-gradient(135deg,#6c5ce7,#a66cff);color:white;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;}'
-+'.meta{font-size:13px;color:#999;text-align:right;transition:color .25s;}'
-// Toolbar
-+'.toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;}'
-+'.tool-btn{padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #ccc;background:#fff;transition:all .2s;color:#666;}'
-+'.tool-btn:hover{border-color:#6c5ce7;color:#6c5ce7;background:#fafaff;}'
-// Stats
-+'.stats{display:flex;gap:12px;margin-bottom:24px;}'
-+'.stat-card{flex:1;background:#fff;border-radius:10px;padding:14px;text-align:center;border:1px solid #e4e6eb;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:all .25s;}'
-+'.stat-val{font-size:22px;font-weight:700;color:#6c5ce7;}'
-+'.stat-val.danger{color:#ff5c5c;}'
-+'.stat-lbl{font-size:10px;color:#999;margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}'
-// Section titles
-+'.section-title{font-size:14px;font-weight:700;margin:20px 0 12px;color:#222;display:flex;align-items:center;gap:8px;transition:color .25s;}'
-+'.section-title::before{content:"";width:4px;height:16px;background:#6c5ce7;border-radius:2px;}'
-// Image area with opacity control
-+'.main-img-wrap{position:relative;text-align:center;margin-bottom:24px;}'
-+'.main-img-wrap img{max-width:100%;border-radius:12px;border:1px solid #e4e6eb;box-shadow:0 4px 24px rgba(0,0,0,.08);display:block;transition:opacity .15s ease,border-color .25s;}'
-+'.img-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;padding:8px 16px;background:rgba(255,255,255,.65);border-radius:10px;backdrop-filter:blur(8px);}'
-+'.img-controls label{font-size:12px;color:#666;font-weight:500;white-space:nowrap;}'
-+'.img-controls input[type=range]{width:130px;height:4px;-webkit-appearance:none;appearance:none;background:#ddd;border-radius:2px;outline:none;}'
-+'.img-controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#6c5ce7;cursor:pointer;box-shadow:0 0 6px rgba(108,92,231,.4);}'
-+'.op-toggle{padding:4px 12px;border:1px solid #ccc;border-radius:6px;background:#fff;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;color:#666;}'
-+'.op-toggle:hover{border-color:#6c5ce7;color:#6c5ce7;}'
-// Bug markers (DOM overlay on image)
-+'.r-bug-marker{position:absolute;z-index:10;transform:translate(-50%,-50%);cursor:pointer;transition:opacity .25s ease;}'
-+'.r-bug-marker.dimmed{opacity:.2;}'
-+'.r-bug-dot{width:38px;height:38px;border-radius:50%;background:#ff5c5c;border:3.5px solid white;box-shadow:0 2px 12px rgba(255,92,92,.45),0 0 24px rgba(255,92,92,.18);display:flex;align-items:center;justify-content:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .25s ease;}'
-+'.r-bug-dot.checked-green{background:#00d68f;box-shadow:0 2px 12px rgba(0,214,143,.45),0 0 24px rgba(0,214,143,.18);}'
-+'.r-bug-num{font-size:16px;font-weight:800;color:white;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}'
-+'.r-bug-label{position:absolute;top:22px;left:20px;background:rgba(255,92,92,.95);color:white;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:500;white-space:nowrap;box-shadow:0 2px 8px rgba(255,92,92,.35);pointer-events:none;opacity:0;transform:translateY(-4px);transition:opacity .2s ease,transform .2s ease;}'
-+'.r-bug-marker:hover .r-bug-dot{transform:scale(1.35);}'
-+'.r-bug-marker:hover .r-bug-label{opacity:1;transform:none;}'
-// Bug table with checkboxes
-+'.bug-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e4e6eb;box-shadow:0 1px 8px rgba(0,0,0,.05);transition:all .25s;}'
-+'.bug-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;background:#fafbfc;padding:10px 14px;border-bottom:2px solid #eee;}'
-+'.bug-table td{padding:10px 14px;border-bottom:1px solid #f7f8fa;font-size:12px;vertical-align:top;transition:background .2s,color .2s;}'
-+'.bug-table tr:last-child td{border-bottom:none;}'
-+'.bug-table tr:hover td{background:#fef5f5;}'
-+'.r-bug-cb{width:17px;height:17px;accent-color:#00d68f;cursor:pointer;}'
-+'.r-bug-id-td{transition:color .25s ease;}'
-// Footer
-+'.footer{text-align:center;margin-top:32px;padding:18px;color:#bbb;font-size:11px;border-top:1px solid #eee;transition:border-color .25s;}'
-+'</style></head><body>'
-+
-'<div class="report">'
-// Header + toolbar
-+'<div class="header"><h1><span>U</span> \u53e0\u52a0\u6548\u679c</h1><div class="meta">' + escapeHtml(state.selectedFrameName || 'Unknown') + '<br/>' + dateStr + '</div></div>'
-+'<div class="toolbar"><button class="tool-btn" id="themeToggleBtn" onclick="toggleTheme()">\u26a1 \u5207\u6362\u4eae/\u6697</button></div>'
-
-// Stats row
-+ (state.diffData ?
-'<div class="stats">'
-+'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPercent').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u7387</div></div>'
-+'<div class="stat-card"><div class="stat-val">'+document.getElementById('diffPixels').textContent+'</div><div class="stat-lbl">\u5dee\u5f02\u50cf\u7d20</div></div>'
-+'<div class="stat-card"><div class="stat-val">'+document.getElementById('similarityScore').textContent+'</div><div class="stat-lbl">\u76f8\u4f3c\u5ea6</div></div>'
-+'<div class="stat-card"><div class="stat-val danger" style="color:#ff5c5c;">'+state.bugs.length+'</div><div class="stat-lbl">Bug \u6570\u91cf</div></div>'
-+'</div>'
-: '')
-
-// Image section with opacity slider and bug markers
-+'<div class="section-title">\u53e0\u52a0\u6548\u679c (\u5e26 Bug \u6807\u8bb0)</div>'
-+'<div class="main-img-wrap">'
-+'<img id="reportImg" src="'+mainImgUrl+'" alt="overlay comparison" style="max-width:100%;"/>'
-+ bugDomMarkers
-// Opacity control bar below image
-+'<div class="img-controls">'
-+'<label>\u900f\u660e\u5ea6</label>'
-+'<input type="range" min="0" max="100" value="'+state.opacity+'" oninput="setImgOpacity(this.value)" />'
-+'<span id="opValLabel" style="font-size:12px;color:#666;min-width:32px;">'+state.opacity+'%</span>'
-+'<button class="op-toggle" onclick="setImgOpacity(0)">0</button>'
-+'<button class="op-toggle" onclick="setImgOpacity(100)">1</button>'
-+'</div>'
-+'</div>'
-
-// Bug table with checkboxes
-+ (state.bugs.length > 0 ?
-('<div class="section-title">Bug \u6807\u8bb0\u5217\u8868 ('+state.bugs.length+')</div>'
-+'<table class="bug-table"><thead><tr><th></th><th>#ID</th><th>\u5750\u6807\u4f4d\u7f6e</th><th>\u63cf\u8ff0</th></tr></thead><tbody>'+bugRows+'</tbody></table>')
-: '')
-
-// Footer
-+'<div class="footer">UI-REL Plugin v1.0 &middot; '+dateStr+'</div>'
-+'</div>'
-
-// Inline JS for interactivity - build script content in a variable first to avoid quote issues
-+('<script>'
-// Theme toggle
-+"function toggleTheme(){var b=document.body;b.classList.toggle('dark');localStorage.setItem('uirel-theme',b.classList.contains('dark')?'dark':'light');}"
-+"(function(){if(localStorage.getItem('uirel-theme')==='dark')document.body.classList.add('dark');})();"
-// Opacity control
-+"function setImgOpacity(v){var el=document.getElementById('reportImg');if(el)el.style.opacity=v/100;var lb=document.getElementById('opValLabel');if(lb)lb.textContent=v+'%;}"
-// Checkbox sync
-+"document.addEventListener('DOMContentLoaded',function(){"
-  +"document.querySelectorAll('.r-bug-cb').forEach(function(cb){"
-    +"cb.addEventListener('change',function(){"
-      +"var id=this.dataset.bugId,chk=this.checked;"
-      +"var dot=document.querySelector('.r-bug-marker[data-id='+id+'] .r-bug-dot');"
-      +"if(dot){dot.classList.toggle('checked-green',chk);dot.classList.toggle('unchecked-red',!chk);}"
-      +"var mk=document.querySelector('.r-bug-marker[data-id='+id+']');"
-      +"if(mk)mk.classList.toggle('dimmed',!chk);"
-      +"var td=cb.closest('tr').querySelector('.r-bug-id-td');"
-      +"if(td)td.style.color=chk?'#00d68f':'#ff5c5c';"
-      +"saveChecks();"
-    +");});"
-  // Save/load
-  +"function saveChecks(){var s={};document.querySelectorAll('.r-bug-cb').forEach(function(c){s[c.dataset.bugId]=c.checked;});localStorage.setItem('uirel-bug-checks',JSON.stringify(s));}"
-  +"function loadChecks(){try{var d=JSON.parse(localStorage.getItem('uirel-bug-checks'));if(d){document.querySelectorAll('.r-bug-cb').forEach(function(c){if(d[c.dataset.bugId]===false){c.checked=false;c.dispatchEvent(new Event('change'));}})}}catch(e){}}"
-  +"loadChecks();"
-+");}"
-// Split <' + '/script> to prevent browser from closing the CURRENT script tag
-+'<' + '/script><' + '/body><' + '/html>')
 
     var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     var url = URL.createObjectURL(blob);
@@ -1885,23 +2695,102 @@ function exportResult() {
     showStatus('HTML \u62a5\u544a\u5df2\u5bfc\u51fa\uff01', 'success');
 }
 
+// 公共：执行删除一项走查任务（滑动删除、叉号按钮、结果区删除共用）
+// itemEl 可以为 null（直接删，无动画）
+function performDeletePair(itemEl, idx) {
+    var pairName = state.comparePairs[idx] ? state.comparePairs[idx].frameName : '';
+
+    // 先从数据中移除
+    state.comparePairs.splice(idx, 1);
+
+    if (state.comparePairs.length === 0) {
+        // 全部删完 → 播放动画后重置
+        if (itemEl && itemEl.parentElement) {
+            playDeleteAnimation(itemEl, function() { fullReset(); });
+            showStatus('已删除所有走查任务', 'info');
+            return;
+        } else {
+            fullReset();
+            showStatus('已删除所有走查任务', 'info');
+            return;
+        }
+    }
+
+    // 调整 activePairIndex
+    if (state.activePairIndex === idx) {
+        state.activePairIndex = Math.min(idx, state.comparePairs.length - 1);
+    } else if (state.activePairIndex > idx) {
+        state.activePairIndex--;
+    }
+
+    if (itemEl && itemEl.parentElement) {
+        // 有 DOM 元素 → 播放删除动画后再刷新列表
+        playDeleteAnimation(itemEl, function() {
+            refreshMultiPreviewList();
+            switchToPair(state.activePairIndex);
+            showStatus('已删除: ' + pairName + '（剩余 ' + state.comparePairs.length + ' 项）', 'info');
+        });
+    } else {
+        // 无 DOM 元素 → 直接刷新
+        refreshMultiPreviewList();
+        switchToPair(state.activePairIndex);
+        showStatus('已删除: ' + pairName + '（剩余 ' + state.comparePairs.length + ' 项）', 'info');
+    }
+}
+
+// 两阶段删除动效：先滑出左移 → 再高度收起上移补位
+function playDeleteAnimation(el, callback) {
+    // 阶段1：滑出（向左移出 + 透明）
+    el.classList.add('slide-out');
+
+    setTimeout(function() {
+        // 阶段2：收起高度（下方卡片上移）
+        var startHeight = el.offsetHeight;
+        el.style.transition = 'max-height 0.28s cubic-bezier(.4,0,.2,1), margin 0.28s ease, padding 0.28s ease, opacity 0.15s ease';
+        el.style.maxHeight = startHeight + 'px';
+        el.style.overflow = 'hidden';
+        el.style.borderWidth = '0';
+
+        // 强制 reflow 后设 max-height: 0
+        void el.offsetHeight;
+        el.style.maxHeight = '0px';
+        el.style.paddingTop = '0';
+        el.style.paddingBottom = '0';
+        el.style.marginTop = '0';
+        el.style.marginBottom = '0';
+
+        setTimeout(function() {
+            callback();
+        }, 300); // 等待收起动画完成
+    }, 280); // 等待滑出完成
+}
+
+// 删除当前走查任务（结果区删除按钮调用）
+function deleteCurrentPair() {
+    if (state.activePairIndex < 0 || state.activePairIndex >= state.comparePairs.length) return;
+    var itemEl = document.querySelector('.preview-pair-item[data-pair-index="' + state.activePairIndex + '"]');
+    performDeletePair(itemEl, state.activePairIndex);
+}
+
+// 完全重置所有状态
 function resetAll() {
-    state={designImage:null,screenshotImage:null,designWidth:0,designHeight:0,screenshotWidth:0,screenshotHeight:0,diffData:null,sensitivity:30,opacity:50,viewMode:'overlay',selectedFrameName:'',bugs:[],nextBugId:1,isMarkMode:false,editingBugId:null,_canvasScaleX:1,_canvasScaleY:1};
-    document.getElementById('frameSelector').className = 'frame-card';
-    document.getElementById('frameSelector').innerHTML='<div class="no-frame">\u672a\u9009\u62e9 Frame</div>';
-    var btn = document.getElementById('selectFrameBtn');
-    btn.className = 'btn-select-frame';
-    btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/></svg> \u9009\u62e9 Figma Frame';
-    btn.disabled=false;
-    document.getElementById('uploadArea').style.display='block';
-    document.getElementById('fileInput').value='';
+    fullReset();
+}
+
+function fullReset() {
+    state={designImage:null,screenshotImage:null,designWidth:0,designHeight:0,screenshotWidth:0,screenshotHeight:0,diffData:null,sensitivity:30,opacity:50,viewMode:'overlay',selectedFrameName:'',bugs:[],nextBugId:1,isMarkMode:false,editingBugId:null,_canvasScaleX:1,_canvasScaleY:1,_pendingBug:null,comparePairs:[],activePairIndex:-1};
+    // Reset preview
+    document.getElementById('singlePreviewRow').style.display = '';
+    document.getElementById('multiPreviewList').innerHTML = '';
+    var label = document.querySelector('#previewSection .sidebar-label');
+    if (label) label.textContent = '预览缩略图';
     document.getElementById('previewSection').style.display='none';
     document.getElementById('resultSection').classList.remove('visible');
     document.getElementById('canvasPlaceholder').style.display = 'flex';
     document.getElementById('comparisonCanvas').style.display = 'none';
 
     // Reset bug marking
-    exitMarkMode();
+    disableMarkMode();
     hideBugPanel();
     document.getElementById('bugListSection').classList.remove('visible');
     document.getElementById('bugListContainer').innerHTML = '';
